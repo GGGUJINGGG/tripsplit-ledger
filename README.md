@@ -6,6 +6,41 @@ That gap was the starting point. As I logged our actual trip expenses into an ea
 
 The first implementation uses a FastAPI backend with local JSON persistence.
 
+## Screenshots
+
+![Trip Detail](screenshots/trip-detail.png)
+
+![Expense Ledger](screenshots/expense-ledger.png)
+
+## Features
+
+**Trip management**
+- Create, edit, and delete trips with date ranges
+- Per-trip dashboard showing total spending, shared spending, and personal spending at a glance
+
+**Expenses**
+- Add, edit, and delete expenses with title, amount, category, date, payer, currency, and an optional note
+- Shared vs. personal expense types — personal expenses count toward your own spending but are excluded from settlement calculations
+- Flexible split: choose which participants share each expense
+- Expense shares calculated in integer cents to avoid floating-point rounding errors
+
+**Filtering and search**
+- Filter the expense ledger by category, payer, type (shared/personal), and date range
+- Free-text search by title or note
+- Sort by newest, oldest, or amount
+
+**Spending summary**
+- Per-participant breakdown: total paid, shared responsibility, personal spending, and net balance
+- Category summary table showing shared vs. personal totals across all 7 categories
+- Daily spending timeline
+
+**Settlements**
+- Simplified payment plan that minimizes the number of transactions
+- Settlement amounts consistent with per-participant net balances
+
+**Export**
+- CSV export of the full expense ledger with all filters applied
+
 ## Known Limitations
 
 - **Single-user, local only** — there is no authentication system yet. All trips are visible to anyone with access to the running instance. This works fine for personal use on a local machine, but is not suitable for shared or hosted deployment.
@@ -18,20 +53,6 @@ The first implementation uses a FastAPI backend with local JSON persistence.
 - Replace JSON storage with a proper database (SQLite for local use, PostgreSQL for deployment)
 - Exchange-rate conversion to enable settlements across mixed-currency trips
 - Budget tracking per trip or per category
-
-## Current Scope
-
-Implemented so far:
-
-- Trip CRUD
-- Participant add/list/delete
-- Expense CRUD
-- Local JSON storage
-- Optional expense currency field for future multi-currency support
-- Dashboard calculations
-- Simplified settlements
-
-Budget tracking is planned for a later phase.
 
 ## Backend Setup
 
@@ -118,10 +139,10 @@ GET /api/trips/{trip_id}/settlements
 
 ## Calculation Logic
 
-The backend currently calculates:
+The backend calculates:
 
 - Total trip spending
-- Spending by category
+- Spending by category (shared and personal separately)
 - Spending by day
 - Amount paid by each person
 - Amount owed by each person
