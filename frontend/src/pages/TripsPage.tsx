@@ -86,19 +86,22 @@ export default function TripsPage() {
               Start date
               <input
                 id="trip-start-date"
+                type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                placeholder="2026-07-01"
               />
+              <span className="field-hint">Stored as YYYY-MM-DD.</span>
             </label>
             <label htmlFor="trip-end-date">
               End date
               <input
                 id="trip-end-date"
+                type="date"
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
-                placeholder="2026-07-04"
+                min={startDate || undefined}
               />
+              <span className="field-hint">Optional. Cannot be before start date.</span>
             </label>
             <button className="primary-button" type="submit" disabled={isSaving}>
               <Plus size={18} />

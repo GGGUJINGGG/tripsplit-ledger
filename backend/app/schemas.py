@@ -1,20 +1,33 @@
+from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models import ExpenseCategory, ExpenseType
 
 
 class TripCreate(BaseModel):
     name: str = Field(min_length=1)
-    start_date: str
-    end_date: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+    @model_validator(mode="after")
+    def end_date_must_not_precede_start_date(self) -> "TripCreate":
+        if self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date cannot be before start_date")
+        return self
 
 
 class TripUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+    @model_validator(mode="after")
+    def end_date_must_not_precede_start_date(self) -> "TripUpdate":
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date cannot be before start_date")
+        return self
 
 
 class ParticipantCreate(BaseModel):
