@@ -4,7 +4,7 @@ After a group trip, I used Splitwise to settle expenses with friends and ran int
 
 That gap was the starting point. As I logged our actual trip expenses into an early version of this app, I kept noticing other things I wanted — filtering, expense types, CSV export, a per-person spending summary — and added them one by one. TripSplit Ledger is the result: a personal expense tracker built around how I actually think about group travel spending.
 
-The first implementation uses a FastAPI backend with local JSON persistence.
+The current implementation uses a React/Vite frontend, a FastAPI backend, and PostgreSQL persistence through SQLAlchemy 2.0. Database schema changes are managed with Alembic, and backend integration tests run against a separate PostgreSQL test database.
 
 ## Screenshots
 
@@ -45,22 +45,40 @@ The first implementation uses a FastAPI backend with local JSON persistence.
 
 - **Single-user, local only** — there is no authentication system yet. All trips are visible to anyone with access to the running instance. This works fine for personal use on a local machine, but is not suitable for shared or hosted deployment.
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented.
-- **JSON file storage** — data is persisted in a local JSON file. This is simple and requires no database setup, but is not safe for concurrent writes or multi-user scenarios.
+- **Local development setup** — PostgreSQL currently runs through Docker Compose. Production database configuration and hosted deployment are not yet included.
 
 ## Planned
 
 - User accounts with registration and login (JWT-based authentication)
-- Replace JSON storage with a proper database (SQLite for local use, PostgreSQL for deployment)
+- Trip-level authorization for owners and members
+- CI with a PostgreSQL test service and Alembic migration checks
+- Production deployment for the API, database, and frontend
 - Exchange-rate conversion to enable settlements across mixed-currency trips
 - Budget tracking per trip or per category
 
 ## Backend Setup
+
+Requirements:
+
+- Python 3.11+
+- Docker Desktop
+- Docker Compose
+
+Start PostgreSQL from the project root:
+
+```bash
+docker compose up -d db
+```
+
+Set up and start the backend:
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
@@ -174,8 +192,22 @@ food, hotel, transportation, gas, tickets, shopping, other
 
 ## Tests
 
-From the backend directory:
+Backend integration tests use a separate PostgreSQL database so development data is never modified.
+
+Create and migrate the test database once:
 
 ```bash
-python3 -m unittest discover -s tests
+docker compose exec db createdb -U tripsplit tripsplit_test
+
+cd backend
+source .venv/bin/activate
+DATABASE_URL=postgresql+psycopg://tripsplit:tripsplit@localhost:5432/tripsplit_test alembic upgrade head
 ```
+
+Run the complete backend test suite from the `backend` directory:
+
+```bash
+python -m unittest discover -s tests
+```
+
+Each integration test runs inside a database transaction that is rolled back after the test.
