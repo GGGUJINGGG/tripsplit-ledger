@@ -1,15 +1,17 @@
-from datetime import date
+from __future__ import annotations
+from datetime import date as DataType, datetime
 from typing import Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models import ExpenseCategory, ExpenseType
+from app.orm_models import ExpenseCategory, ExpenseType
 
 
 class TripCreate(BaseModel):
     name: str = Field(min_length=1)
-    start_date: date
-    end_date: Optional[date] = None
+    start_date: DataType
+    end_date: Optional[DataType] = None
 
     @model_validator(mode="after")
     def end_date_must_not_precede_start_date(self) -> "TripCreate":
@@ -20,14 +22,37 @@ class TripCreate(BaseModel):
 
 class TripUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    start_date: Optional[DataType] = None
+    end_date: Optional[DataType] = None
 
     @model_validator(mode="after")
     def end_date_must_not_precede_start_date(self) -> "TripUpdate":
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValueError("end_date cannot be before start_date")
         return self
+
+
+class ParticipantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str = Field(validation_alias="display_name")
+
+
+class TripRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    start_date: DataType
+    end_date: Optional[DataType]
+    participants: list[ParticipantRead] = Field(
+        default_factory=list,
+        validation_alias="members",
+    )
+    expenses: list[ExpenseRead] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
 
 
 class ParticipantCreate(BaseModel):
@@ -37,11 +62,11 @@ class ParticipantCreate(BaseModel):
 class ExpenseCreate(BaseModel):
     title: str = Field(min_length=1)
     amount: float = Field(gt=0)
-    paid_by: str
-    split_among: list[str] = Field(min_length=1)
+    paid_by: UUID
+    split_among: list[UUID] = Field(min_length=1)
     expense_type: ExpenseType = ExpenseType.SHARED
     category: ExpenseCategory
-    date: str
+    date: DataType
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     note: Optional[str] = None
 
@@ -49,13 +74,30 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1)
     amount: Optional[float] = Field(default=None, gt=0)
-    paid_by: Optional[str] = None
-    split_among: Optional[list[str]] = Field(default=None, min_length=1)
+    paid_by: Optional[UUID] = None
+    split_among: Optional[list[UUID]] = Field(default=None, min_length=1)
     expense_type: Optional[ExpenseType] = None
     category: Optional[ExpenseCategory] = None
-    date: Optional[str] = None
+    date: Optional[DataType] = None
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     note: Optional[str] = None
+
+
+class ExpenseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    trip_id: UUID
+    title: str
+    amount: float
+    paid_by: UUID = Field(validation_alias="paid_by_id")
+    split_among: list[UUID]
+    expense_type: ExpenseType
+    category: ExpenseCategory
+    date: DataType
+    currency: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
 
 
 class CategorySpending(BaseModel):

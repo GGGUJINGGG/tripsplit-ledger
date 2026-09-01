@@ -1,0 +1,44 @@
+import unittest
+from collections.abc import Generator
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import get_db
+from app.main import app
+
+
+test_engine = create_engine(
+    settings.test_database_url,
+    pool_pre_ping=True,
+)
+
+
+class DatabaseTestCase(unittest.TestCase):
+    connection: Connection
+    session: Session
+    client: TestClient
+
+    def setUp(self) -> None:
+        self.connection = test_engine.connect()
+        self.transaction = self.connection.begin()
+        self.session = Session(
+            bind=self.connection,
+            join_transaction_mode="create_savepoint",
+        )
+
+        def override_get_db() -> Generator[Session, None, None]:
+            yield self.session
+
+        app.dependency_overrides[get_db] = override_get_db
+        self.client = TestClient(app)
+
+    def tearDown(self) -> None:
+        self.client.close()
+        app.dependency_overrides.clear()
+        self.session.close()
+        self.transaction.rollback()
+        self.connection.close()

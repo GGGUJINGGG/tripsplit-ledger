@@ -1,24 +1,98 @@
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
-from app.models import Expense, ExpenseType
-from app.schemas import ExpenseCreate, ExpenseUpdate
-from app.storage import load_data, save_data
+from app.database import get_db
+from app.orm_models import (
+    Expense,
+    ExpenseCategory as DBExpenseCategory,
+    ExpenseShare,
+    ExpenseType as DBExpenseType,
+    Trip,
+    TripMember,
+)
+from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate
 
 
-router = APIRouter(prefix="/trips/{trip_id}/expenses", tags=["expenses"])
+router = APIRouter(
+    prefix="/trips/{trip_id}/expenses",
+    tags=["expenses"],
+)
 
 
-def utc_now() -> str:
-    return datetime.now(UTC).isoformat()
+def amount_to_cents(amount: float) -> int:
+    return round(amount * 100)
+
+
+def split_cents_evenly(
+    amount_cents: int,
+    participant_ids: list[UUID],
+) -> dict[UUID, int]:
+    sorted_ids = sorted(participant_ids, key=str)
+    base_share, remainder = divmod(
+        amount_cents,
+        len(sorted_ids),
+    )
+
+    return {
+        participant_id: base_share + (1 if index < remainder else 0)
+        for index, participant_id in enumerate(sorted_ids)
+    }
+
+
+def find_trip_or_404(
+    db: Session,
+    trip_id: UUID,
+) -> Trip:
+    trip = db.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+    return trip
+
+
+def find_expense_or_404(
+    db: Session,
+    trip_id: UUID,
+    expense_id: UUID,
+) -> Expense:
+    statement = (
+        select(Expense)
+        .options(selectinload(Expense.shares))
+        .where(
+            Expense.id == expense_id,
+            Expense.trip_id == trip_id,
+        )
+    )
+    expense = db.scalar(statement)
+
+    if expense is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense not found",
+        )
+    return expense
+
+
+def get_participant_ids(
+    db: Session,
+    trip_id: UUID,
+) -> set[UUID]:
+    statement = select(TripMember.id).where(
+        TripMember.trip_id == trip_id
+    )
+    return set(db.scalars(statement).all())
 
 
 def validate_expense_people(
-    participant_ids: set[str],
-    paid_by: str,
-    split_among: list[str],
+    participant_ids: set[UUID],
+    paid_by: UUID,
+    split_among: list[UUID],
 ) -> None:
     if paid_by not in participant_ids:
         raise HTTPException(
@@ -26,130 +100,234 @@ def validate_expense_people(
             detail="paid_by must be an existing participant",
         )
 
-    unknown_splitters = sorted(set(split_among) - participant_ids)
-    if unknown_splitters:
+    if len(split_among) != len(set(split_among)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"split_among contains unknown participants: {unknown_splitters}",
+            detail="split_among contains duplicate participants",
+        )
+
+    unknown_splitters = sorted(
+        set(split_among) - participant_ids,
+        key=str,
+    )
+    if unknown_splitters:
+        unknown_ids = [str(item) for item in unknown_splitters]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "split_among contains unknown participants: "
+                f"{unknown_ids}"
+            ),
         )
 
 
-@router.get("", response_model=list[Expense])
-def list_expenses(trip_id: str) -> list[Expense]:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            return trip.expenses
+def replace_expense_shares(
+    db: Session,
+    expense: Expense,
+    participant_ids: list[UUID],
+) -> None:
+    expense.shares.clear()
+    db.flush()
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
-
-@router.post("", response_model=Expense, status_code=status.HTTP_201_CREATED)
-def create_expense(trip_id: str, payload: ExpenseCreate) -> Expense:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            participant_ids = {participant.id for participant in trip.participants}
-            split_among = (
-                [payload.paid_by]
-                if payload.expense_type == ExpenseType.PERSONAL
-                else payload.split_among
-            )
-            validate_expense_people(participant_ids, payload.paid_by, split_among)
-
-            now = utc_now()
-            expense = Expense(
-                id=str(uuid4()),
-                trip_id=trip_id,
-                title=payload.title,
-                amount=payload.amount,
-                paid_by=payload.paid_by,
-                split_among=split_among,
-                expense_type=payload.expense_type,
-                category=payload.category,
-                date=payload.date,
-                currency=payload.currency,
-                note=payload.note,
-                created_at=now,
-                updated_at=now,
-            )
-            trip.expenses.append(expense)
-            trip.updated_at = now
-            save_data(data)
-            return expense
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    shares = split_cents_evenly(
+        expense.amount_cents,
+        participant_ids,
+    )
+    expense.shares = [
+        ExpenseShare(
+            member_id=participant_id,
+            amount_cents=share_cents,
+        )
+        for participant_id, share_cents in shares.items()
+    ]
 
 
-@router.get("/{expense_id}", response_model=Expense)
-def get_expense(trip_id: str, expense_id: str) -> Expense:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            for expense in trip.expenses:
-                if expense.id == expense_id:
-                    return expense
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Expense not found",
-            )
+@router.get("", response_model=list[ExpenseRead])
+def list_expenses(
+    trip_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[Expense]:
+    find_trip_or_404(db, trip_id)
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
-
-@router.put("/{expense_id}", response_model=Expense)
-def update_expense(trip_id: str, expense_id: str, payload: ExpenseUpdate) -> Expense:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            participant_ids = {participant.id for participant in trip.participants}
-            for index, expense in enumerate(trip.expenses):
-                if expense.id == expense_id:
-                    updates = payload.model_dump(exclude_unset=True)
-                    paid_by = updates.get("paid_by", expense.paid_by)
-                    expense_type = updates.get("expense_type", expense.expense_type)
-                    split_among = (
-                        [paid_by]
-                        if expense_type == ExpenseType.PERSONAL
-                        else updates.get("split_among", expense.split_among)
-                    )
-                    validate_expense_people(participant_ids, paid_by, split_among)
-                    updates["split_among"] = split_among
-
-                    updated_expense = expense.model_copy(
-                        update={**updates, "updated_at": utc_now()}
-                    )
-                    trip.expenses[index] = updated_expense
-                    trip.updated_at = updated_expense.updated_at
-                    save_data(data)
-                    return updated_expense
-
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Expense not found",
-            )
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    statement = (
+        select(Expense)
+        .options(selectinload(Expense.shares))
+        .where(Expense.trip_id == trip_id)
+        .order_by(
+            Expense.expense_date.desc(),
+            Expense.created_at.desc(),
+        )
+    )
+    return list(db.scalars(statement).all())
 
 
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(trip_id: str, expense_id: str) -> None:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            original_count = len(trip.expenses)
-            trip.expenses = [
-                expense for expense in trip.expenses if expense.id != expense_id
-            ]
+@router.post(
+    "",
+    response_model=ExpenseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_expense(
+    trip_id: UUID,
+    payload: ExpenseCreate,
+    db: Session = Depends(get_db),
+) -> Expense:
+    trip = find_trip_or_404(db, trip_id)
+    participant_ids = get_participant_ids(db, trip_id)
 
-            if len(trip.expenses) == original_count:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Expense not found",
-                )
+    expense_type = DBExpenseType(payload.expense_type.value)
+    split_among = (
+        [payload.paid_by]
+        if expense_type == DBExpenseType.PERSONAL
+        else payload.split_among
+    )
+    validate_expense_people(
+        participant_ids,
+        payload.paid_by,
+        split_among,
+    )
 
-            trip.updated_at = utc_now()
-            save_data(data)
-            return
+    expense = Expense(
+        trip_id=trip.id,
+        paid_by_id=payload.paid_by,
+        title=payload.title,
+        amount_cents=amount_to_cents(payload.amount),
+        expense_type=expense_type,
+        category=DBExpenseCategory(payload.category.value),
+        expense_date=payload.date,
+        currency=(payload.currency or "USD").upper(),
+        note=payload.note,
+    )
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    shares = split_cents_evenly(
+        expense.amount_cents,
+        split_among,
+    )
+    expense.shares = [
+        ExpenseShare(
+            member_id=participant_id,
+            amount_cents=share_cents,
+        )
+        for participant_id, share_cents in shares.items()
+    ]
+
+    trip.updated_at = datetime.now(UTC)
+    db.add(expense)
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+@router.get("/{expense_id}", response_model=ExpenseRead)
+def get_expense(
+    trip_id: UUID,
+    expense_id: UUID,
+    db: Session = Depends(get_db),
+) -> Expense:
+    find_trip_or_404(db, trip_id)
+    return find_expense_or_404(
+        db,
+        trip_id,
+        expense_id,
+    )
+
+
+@router.put("/{expense_id}", response_model=ExpenseRead)
+def update_expense(
+    trip_id: UUID,
+    expense_id: UUID,
+    payload: ExpenseUpdate,
+    db: Session = Depends(get_db),
+) -> Expense:
+    trip = find_trip_or_404(db, trip_id)
+    expense = find_expense_or_404(
+        db,
+        trip_id,
+        expense_id,
+    )
+    updates = payload.model_dump(exclude_unset=True)
+
+    paid_by = updates.get(
+        "paid_by",
+        expense.paid_by_id,
+    )
+    expense_type = (
+        DBExpenseType(updates["expense_type"].value)
+        if "expense_type" in updates
+        and updates["expense_type"] is not None
+        else expense.expense_type
+    )
+    split_among = (
+        [paid_by]
+        if expense_type == DBExpenseType.PERSONAL
+        else updates.get(
+            "split_among",
+            expense.split_among,
+        )
+    )
+
+    validate_expense_people(
+        get_participant_ids(db, trip_id),
+        paid_by,
+        split_among,
+    )
+
+    expense.paid_by_id = paid_by
+    expense.expense_type = expense_type
+
+    if updates.get("title") is not None:
+        expense.title = updates["title"]
+    if updates.get("amount") is not None:
+        expense.amount_cents = amount_to_cents(
+            updates["amount"]
+        )
+    if updates.get("category") is not None:
+        expense.category = DBExpenseCategory(
+            updates["category"].value
+        )
+    if updates.get("date") is not None:
+        expense.expense_date = updates["date"]
+    if "currency" in updates:
+        expense.currency = (
+            updates["currency"] or "USD"
+        ).upper()
+    if "note" in updates:
+        expense.note = updates["note"]
+
+    share_fields = {
+        "amount",
+        "paid_by",
+        "split_among",
+        "expense_type",
+    }
+    if share_fields.intersection(updates):
+        replace_expense_shares(
+            db,
+            expense,
+            split_among,
+        )
+
+    trip.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+@router.delete(
+    "/{expense_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_expense(
+    trip_id: UUID,
+    expense_id: UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    trip = find_trip_or_404(db, trip_id)
+    expense = find_expense_or_404(
+        db,
+        trip_id,
+        expense_id,
+    )
+
+    trip.updated_at = datetime.now(UTC)
+    db.delete(expense)
+    db.commit()

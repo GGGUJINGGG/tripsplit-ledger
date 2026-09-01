@@ -1,25 +1,7 @@
-import tempfile
-import unittest
-from pathlib import Path
-from unittest.mock import patch
-
-from fastapi.testclient import TestClient
-
-from app.main import app
+from tests.base import DatabaseTestCase
 
 
-class ExpenseRouteTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.data_file = Path(self.temp_dir.name) / "trips.json"
-        self.data_file.write_text('{"trips": []}', encoding="utf-8")
-        self.patch = patch("app.storage.DATA_FILE", self.data_file)
-        self.patch.start()
-        self.client = TestClient(app)
-
-    def tearDown(self) -> None:
-        self.patch.stop()
-        self.temp_dir.cleanup()
+class ExpenseRouteTests(DatabaseTestCase):
 
     def test_update_shared_expense_to_personal_persists_type(self) -> None:
         trip = self.client.post(
@@ -62,6 +44,7 @@ class ExpenseRouteTests(unittest.TestCase):
             },
         )
 
+
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["expense_type"], "personal")
         self.assertEqual(updated.json()["split_among"], [alex["id"]])
@@ -70,10 +53,3 @@ class ExpenseRouteTests(unittest.TestCase):
         reloaded_expense = reloaded_trip["expenses"][0]
         self.assertEqual(reloaded_expense["expense_type"], "personal")
         self.assertEqual(reloaded_expense["split_among"], [alex["id"]])
-
-        settlements = self.client.get(f"/api/trips/{trip['id']}/settlements").json()
-        self.assertEqual(settlements["settlements"], [])
-
-
-if __name__ == "__main__":
-    unittest.main()

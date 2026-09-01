@@ -1,26 +1,7 @@
-import tempfile
-import unittest
-from pathlib import Path
-from unittest.mock import patch
-
-from fastapi.testclient import TestClient
-
-from app.main import app
+from tests.base import DatabaseTestCase
 
 
-class TripRouteTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.data_file = Path(self.temp_dir.name) / "trips.json"
-        self.data_file.write_text('{"trips": []}', encoding="utf-8")
-        self.patch = patch("app.storage.DATA_FILE", self.data_file)
-        self.patch.start()
-        self.client = TestClient(app)
-
-    def tearDown(self) -> None:
-        self.patch.stop()
-        self.temp_dir.cleanup()
-
+class TripRouteTests(DatabaseTestCase):
     def assert_validation_message_contains(self, response, expected: str) -> None:
         messages = [error["msg"] for error in response.json()["detail"]]
         self.assertTrue(
@@ -95,7 +76,3 @@ class TripRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assert_validation_message_contains(response, "end_date cannot be before start_date")
-
-
-if __name__ == "__main__":
-    unittest.main()

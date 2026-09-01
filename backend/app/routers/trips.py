@@ -1,31 +1,33 @@
-from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models import Trip
-from app.schemas import TripCreate, TripUpdate
-from app.storage import load_data, save_data
+from app.database import get_db
+from app.orm_models import Trip
+from app.schemas import TripCreate, TripRead, TripUpdate
 
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
 
-def utc_now() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def find_trip_or_404(trip_id: str) -> Trip:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            return trip
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+def find_trip_or_404(db: Session, trip_id: UUID) -> Trip:
+    trip = db.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+    return trip
 
 
 def to_422(validation_error: ValidationError) -> HTTPException:
-    errors = validation_error.errors(include_url=False, include_input=False)
+    errors = validation_error.errors(
+        include_url=False,
+        include_input=False,
+    )
     for error in errors:
         ctx = error.get("ctx")
         if ctx and "error" in ctx:
@@ -37,12 +39,11 @@ def to_422(validation_error: ValidationError) -> HTTPException:
     )
 
 
-def normalize_trip_updates(trip: Trip, payload: TripUpdate) -> dict:
+def normalize_trip_updates(
+        trip: Trip,
+        payload: TripUpdate,
+    ) -> dict:
     updates = payload.model_dump(exclude_unset=True)
-    if "start_date" in updates:
-        updates["start_date"] = updates["start_date"].isoformat()
-    if "end_date" in updates and updates["end_date"]:
-        updates["end_date"] = updates["end_date"].isoformat()
 
     try:
         TripCreate(
@@ -56,57 +57,67 @@ def normalize_trip_updates(trip: Trip, payload: TripUpdate) -> dict:
     return updates
 
 
-@router.get("", response_model=list[Trip])
-def list_trips() -> list[Trip]:
-    data = load_data()
-    return data.trips
+@router.get("", response_model=list[TripRead])
+def list_trips(
+    db: Session = Depends(get_db),
+) -> list[Trip]:
+    statement = select(Trip).order_by(Trip.created_at.desc())
+    return list(db.scalars(statement).all())
 
 
-@router.post("", response_model=Trip, status_code=status.HTTP_201_CREATED)
-def create_trip(payload: TripCreate) -> Trip:
-    data = load_data()
-    now = utc_now()
+@router.post(
+        "",
+        response_model=TripRead,
+        status_code=status.HTTP_201_CREATED,
+)
+def create_trip(
+    payload: TripCreate,
+    db: Session = Depends(get_db),
+) -> Trip:
     trip = Trip(
-        id=str(uuid4()),
         name=payload.name,
-        start_date=payload.start_date.isoformat(),
-        end_date=payload.end_date.isoformat() if payload.end_date else None,
-        created_at=now,
-        updated_at=now,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
     )
-    data.trips.append(trip)
-    save_data(data)
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
     return trip
 
 
-@router.get("/{trip_id}", response_model=Trip)
-def get_trip(trip_id: str) -> Trip:
-    return find_trip_or_404(trip_id)
+@router.get("/{trip_id}", response_model=TripRead)
+def get_trip(
+    trip_id: UUID,
+    db: Session = Depends(get_db),
+) -> Trip:
+    return find_trip_or_404(db, trip_id)
 
 
-@router.put("/{trip_id}", response_model=Trip)
-def update_trip(trip_id: str, payload: TripUpdate) -> Trip:
-    data = load_data()
-    for index, trip in enumerate(data.trips):
-        if trip.id == trip_id:
-            updates = normalize_trip_updates(trip, payload)
-            updated_trip = trip.model_copy(
-                update={**updates, "updated_at": utc_now()}
-            )
-            data.trips[index] = updated_trip
-            save_data(data)
-            return updated_trip
+@router.put("/{trip_id}", response_model=TripRead)
+def update_trip(
+    trip_id: UUID,
+    payload: TripUpdate,
+    db: Session = Depends(get_db),
+) -> Trip:
+    trip = find_trip_or_404(db, trip_id)
+    updates = normalize_trip_updates(trip, payload)
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    for field, value in updates.items():
+        setattr(trip, field, value)
+
+    db.commit()
+    db.refresh(trip)
+    return trip
 
 
-@router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_trip(trip_id: str) -> None:
-    data = load_data()
-    original_count = len(data.trips)
-    data.trips = [trip for trip in data.trips if trip.id != trip_id]
-
-    if len(data.trips) == original_count:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
-    save_data(data)
+@router.delete(
+        "/{trip_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_trip(
+    trip_id: UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    trip = find_trip_or_404(db, trip_id)
+    db.delete(trip)
+    db.commit()

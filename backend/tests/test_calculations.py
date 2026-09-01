@@ -1,61 +1,65 @@
 import unittest
+from types import SimpleNamespace
 
-from app.models import Expense, ExpenseCategory, ExpenseType, Participant, Trip
+from app.orm_models import ExpenseCategory, ExpenseType
 from app.services.calculations import build_dashboard_summary
 from app.services.settlements import simplify_settlements
 
 
 class CalculationTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.alex = Participant(id="alex", name="Alex")
-        self.maya = Participant(id="maya", name="Maya")
-        self.sam = Participant(id="sam", name="Sam")
-        self.trip = Trip(
+        self.alex = SimpleNamespace(id="alex", name="Alex")
+        self.maya = SimpleNamespace(id="maya", name="Maya")
+        self.sam = SimpleNamespace(id="sam", name="Sam")
+        self.trip = SimpleNamespace(
             id="trip-1",
             name="Test Trip",
             start_date="2026-07-01",
             participants=[self.alex, self.maya, self.sam],
             expenses=[
-                Expense(
+                SimpleNamespace(
                     id="expense-1",
                     trip_id="trip-1",
                     title="Hotel",
                     amount=300,
                     paid_by="alex",
                     split_among=["alex", "maya", "sam"],
+                    expense_type=ExpenseType.SHARED,
                     category=ExpenseCategory.HOTEL,
                     date="2026-07-01",
                     currency="USD",
                     created_at="2026-07-01T00:00:00Z",
                     updated_at="2026-07-01T00:00:00Z",
                 ),
-                Expense(
+                SimpleNamespace(
                     id="expense-2",
                     trip_id="trip-1",
                     title="Dinner",
                     amount=90,
                     paid_by="maya",
                     split_among=["alex", "maya", "sam"],
+                    expense_type=ExpenseType.SHARED,
                     category=ExpenseCategory.FOOD,
                     date="2026-07-01",
                     currency="USD",
                     created_at="2026-07-01T00:00:00Z",
                     updated_at="2026-07-01T00:00:00Z",
                 ),
-                Expense(
+                SimpleNamespace(
                     id="expense-3",
                     trip_id="trip-1",
                     title="Gas",
                     amount=60,
                     paid_by="sam",
                     split_among=["alex", "sam"],
+                    expense_type=ExpenseType.SHARED,
                     category=ExpenseCategory.GAS,
                     date="2026-07-02",
                     currency="USD",
                     created_at="2026-07-02T00:00:00Z",
                     updated_at="2026-07-02T00:00:00Z",
                 ),
-                Expense(
+                SimpleNamespace(
                     id="expense-4",
                     trip_id="trip-1",
                     title="Souvenir",

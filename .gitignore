@@ -7,3 +7,5 @@ dist/
 .DS_Store
 .Rhistory
 backend/app/data/
+.env
+backend/.env

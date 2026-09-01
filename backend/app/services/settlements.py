@@ -1,44 +1,81 @@
-from app.models import Trip
+from typing import Any
+
 from app.schemas import Settlement, SettlementSummary
-from app.services.calculations import cents_to_float, net_balances_cents
+from app.services.calculations import (
+    cents_to_float,
+    get_participant_name,
+    get_participants,
+    net_balances_cents,
+)
 
 
-def simplify_settlements(trip: Trip) -> SettlementSummary:
+def simplify_settlements(trip: Any) -> SettlementSummary:
     balances = net_balances_cents(trip)
+    participants = get_participants(trip)
+
     participants_by_id = {
-        participant.id: participant.name for participant in trip.participants
+        participant.id: get_participant_name(participant)
+        for participant in participants
     }
 
     debtors = [
-        {"participant_id": participant_id, "amount": -balance}
+        {
+            "participant_id": participant_id,
+            "amount": -balance,
+        }
         for participant_id, balance in balances.items()
         if balance < 0
     ]
+
     creditors = [
-        {"participant_id": participant_id, "amount": balance}
+        {
+            "participant_id": participant_id,
+            "amount": balance,
+        }
         for participant_id, balance in balances.items()
         if balance > 0
     ]
 
-    debtors.sort(key=lambda item: item["amount"], reverse=True)
-    creditors.sort(key=lambda item: item["amount"], reverse=True)
+    debtors.sort(
+        key=lambda item: item["amount"],
+        reverse=True,
+    )
+    creditors.sort(
+        key=lambda item: item["amount"],
+        reverse=True,
+    )
 
     settlements: list[Settlement] = []
     debtor_index = 0
     creditor_index = 0
 
-    while debtor_index < len(debtors) and creditor_index < len(creditors):
+    while (
+        debtor_index < len(debtors)
+        and creditor_index < len(creditors)
+    ):
         debtor = debtors[debtor_index]
         creditor = creditors[creditor_index]
-        payment_cents = min(debtor["amount"], creditor["amount"])
+
+        payment_cents = min(
+            debtor["amount"],
+            creditor["amount"],
+        )
 
         if payment_cents > 0:
             settlements.append(
                 Settlement(
-                    from_participant_id=debtor["participant_id"],
-                    from_name=participants_by_id[debtor["participant_id"]],
-                    to_participant_id=creditor["participant_id"],
-                    to_name=participants_by_id[creditor["participant_id"]],
+                    from_participant_id=str(
+                        debtor["participant_id"]
+                    ),
+                    from_name=participants_by_id[
+                        debtor["participant_id"]
+                    ],
+                    to_participant_id=str(
+                        creditor["participant_id"]
+                    ),
+                    to_name=participants_by_id[
+                        creditor["participant_id"]
+                    ],
                     amount=cents_to_float(payment_cents),
                 )
             )
@@ -48,6 +85,7 @@ def simplify_settlements(trip: Trip) -> SettlementSummary:
 
         if debtor["amount"] == 0:
             debtor_index += 1
+
         if creditor["amount"] == 0:
             creditor_index += 1
 

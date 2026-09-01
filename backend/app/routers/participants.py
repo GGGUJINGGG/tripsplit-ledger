@@ -1,76 +1,130 @@
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models import Participant
-from app.schemas import ParticipantCreate
-from app.storage import load_data, save_data
-
-
-router = APIRouter(prefix="/trips/{trip_id}/participants", tags=["participants"])
-
-
-def utc_now() -> str:
-    return datetime.now(UTC).isoformat()
+from app.database import get_db
+from app.orm_models import Expense, ExpenseShare, Trip, TripMember
+from app.schemas import ParticipantCreate, ParticipantRead
 
 
-@router.get("", response_model=list[Participant])
-def list_participants(trip_id: str) -> list[Participant]:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            return trip.participants
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+router = APIRouter(
+    prefix="/trips/{trip_id}/participants",
+    tags=["participants"],
+)
 
 
-@router.post("", response_model=Participant, status_code=status.HTTP_201_CREATED)
-def create_participant(trip_id: str, payload: ParticipantCreate) -> Participant:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            participant = Participant(id=str(uuid4()), name=payload.name)
-            trip.participants.append(participant)
-            trip.updated_at = utc_now()
-            save_data(data)
-            return participant
+def find_trip_or_404(
+    db: Session,
+    trip_id: UUID,
+) -> Trip:
+    trip = db.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+    return trip
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+
+def find_member_or_404(
+    db: Session,
+    trip_id: UUID,
+    participant_id: UUID,
+) -> TripMember:
+    statement = select(TripMember).where(
+        TripMember.id == participant_id,
+        TripMember.trip_id == trip_id,
+    )
+    member = db.scalar(statement)
+
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Participant not found",
+        )
+    return member
 
 
-@router.delete("/{participant_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_participant(trip_id: str, participant_id: str) -> None:
-    data = load_data()
-    for trip in data.trips:
-        if trip.id == trip_id:
-            if any(expense.paid_by == participant_id for expense in trip.expenses):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Participant paid for one or more expenses",
-                )
+@router.get("", response_model=list[ParticipantRead])
+def list_participants(
+    trip_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[TripMember]:
+    find_trip_or_404(db, trip_id)
 
-            if any(participant_id in expense.split_among for expense in trip.expenses):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Participant is included in one or more expense splits",
-                )
+    statement = (
+        select(TripMember)
+        .where(TripMember.trip_id == trip_id)
+        .order_by(TripMember.created_at)
+    )
+    return list(db.scalars(statement).all())
 
-            original_count = len(trip.participants)
-            trip.participants = [
-                participant
-                for participant in trip.participants
-                if participant.id != participant_id
-            ]
 
-            if len(trip.participants) == original_count:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Participant not found",
-                )
+@router.post(
+    "",
+    response_model=ParticipantRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_participant(
+    trip_id: UUID,
+    payload: ParticipantCreate,
+    db: Session = Depends(get_db),
+) -> TripMember:
+    trip = find_trip_or_404(db, trip_id)
 
-            trip.updated_at = utc_now()
-            save_data(data)
-            return
+    member = TripMember(
+        trip_id=trip.id,
+        display_name=payload.name,
+    )
+    trip.updated_at = datetime.now(UTC)
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+@router.delete(
+    "/{participant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_participant(
+    trip_id: UUID,
+    participant_id: UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    trip = find_trip_or_404(db, trip_id)
+    member = find_member_or_404(
+        db,
+        trip_id,
+        participant_id,
+    )
+
+    paid_expense_id = db.scalar(
+        select(Expense.id)
+        .where(Expense.paid_by_id == participant_id)
+        .limit(1)
+    )
+    if paid_expense_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Participant paid for one or more expenses",
+        )
+
+    expense_share_id = db.scalar(
+        select(ExpenseShare.id)
+        .where(ExpenseShare.member_id == participant_id)
+        .limit(1)
+    )
+    if expense_share_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Participant is included in one or more expense splits",
+        )
+
+    trip.updated_at = datetime.now(UTC)
+    db.delete(member)
+    db.commit()

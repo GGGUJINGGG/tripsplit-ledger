@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17
+    container_name: tripsplit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tripsplit
+      POSTGRES_PASSWORD: tripsplit
+      POSTGRES_DB: tripsplit
+    ports:
+      - "5432:5432"
+    volumes:
+      - tripsplit_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripsplit -d tripsplit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tripsplit_postgres_data:
