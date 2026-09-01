@@ -3,10 +3,35 @@ from datetime import date as DataType, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.orm_models import ExpenseCategory, ExpenseType
 
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=12, max_length=128)
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: EmailStr
+    display_name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 class TripCreate(BaseModel):
     name: str = Field(min_length=1)

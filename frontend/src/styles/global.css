@@ -38,6 +38,8 @@ a {
   background: #15191f;
   color: #f7f9fb;
   padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -80,6 +82,45 @@ a {
 
 .nav-list a.active,
 .nav-list a:hover {
+  background: #242b34;
+  color: #ffffff;
+}
+
+.sidebar-account {
+  border-top: 1px solid #303740;
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.sidebar-account strong,
+.sidebar-account span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-account span {
+  color: #aab4be;
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+
+.sidebar-logout {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #3a424c;
+  border-radius: 8px;
+  color: #dce3ea;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.sidebar-logout:hover {
   background: #242b34;
   color: #ffffff;
 }
@@ -476,6 +517,39 @@ th {
   padding: 8px 10px;
 }
 
+.auth-page {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #dce2e8;
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(24, 31, 38, 0.1);
+  display: grid;
+  gap: 22px;
+  max-width: 420px;
+  padding: 28px;
+  width: 100%;
+}
+
+.auth-card h1 {
+  font-size: 2rem;
+  margin: 6px 0 8px;
+}
+
+.auth-card .muted {
+  margin: 0;
+}
+
+.auth-card .primary-button {
+  width: 100%;
+}
+
 @media (max-width: 880px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -484,8 +558,20 @@ th {
   .sidebar {
     align-items: center;
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
     padding: 14px 18px;
+  }
+
+  .sidebar-account {
+    border-top: 0;
+    display: flex;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .sidebar-account > div {
+    display: none;
   }
 
   .brand {
@@ -525,4 +611,20 @@ th {
   .filter-actions .secondary-button {
     width: 100%;
   }
+}
+
+.auth-switch {
+  color: #687381;
+  font-size: 0.9rem;
+  margin: 0;
+  text-align: center;
+}
+
+.auth-switch a {
+  color: #1f6f61;
+  font-weight: 700;
+}
+
+.auth-switch a:hover {
+  text-decoration: none;
 }

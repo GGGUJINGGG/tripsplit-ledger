@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import dashboard, expenses, participants, settlements, trips
+from app.routers import auth, dashboard, expenses, participants, settlements, trips
 
 
 app = FastAPI(title="TripSplit Ledger API")
@@ -14,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(trips.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")

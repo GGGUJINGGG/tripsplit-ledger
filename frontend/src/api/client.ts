@@ -1,3 +1,4 @@
+import { getAccessToken } from "./token";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000/api";
 
@@ -5,12 +6,20 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const headers = new Headers(options.headers);
+  const accessToken = getAccessToken();
+
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
     ...options,
+    headers,
   });
 
   if (!response.ok) {
@@ -21,7 +30,9 @@ export async function apiRequest<T>(
     } catch {
       // Keep the status message when the server does not return JSON.
     }
-    throw new Error(Array.isArray(message) ? JSON.stringify(message) : message);
+    throw new Error(
+      Array.isArray(message) ? JSON.stringify(message) : message,
+    );
   }
 
   if (response.status === 204) {

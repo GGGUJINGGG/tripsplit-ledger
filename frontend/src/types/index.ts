@@ -76,3 +76,27 @@ export interface Settlement {
 export interface SettlementSummary {
   settlements: Settlement[];
 }
+
+export interface User{
+  id: string;
+  email: string;
+  display_name:string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRegistration{
+  email: string;
+  password: string;
+  display_name: string;
+}
+
+export interface UserLogin{
+  email:string;
+  password: string;
+}
+
+export interface AuthToken{
+  access_token: string;
+  token_type: "bearer";
+}
