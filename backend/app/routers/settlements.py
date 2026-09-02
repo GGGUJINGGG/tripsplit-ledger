@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth_dependencies import get_current_user
 from app.database import get_db
-from app.orm_models import Expense, Trip
+from app.orm_models import Expense, Trip, TripMember, User
 from app.schemas import SettlementSummary
 from app.services.settlements import simplify_settlements
 
@@ -20,6 +21,7 @@ router = APIRouter(
 def get_settlements(
     trip_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> SettlementSummary:
     statement = (
         select(Trip)
@@ -29,7 +31,10 @@ def get_settlements(
                 Expense.shares
             ),
         )
-        .where(Trip.id == trip_id)
+        .where(
+            Trip.id == trip_id,
+            Trip.members.any(TripMember.user_id == current_user.id),
+        )
     )
     trip = db.scalar(statement)
 

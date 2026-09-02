@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth_dependencies import get_current_user
 from app.database import get_db
 from app.orm_models import (
     Expense,
@@ -13,7 +14,9 @@ from app.orm_models import (
     ExpenseType as DBExpenseType,
     Trip,
     TripMember,
+    User,
 )
+from app.routers.trips import find_trip_or_404
 from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate
 
 
@@ -41,19 +44,6 @@ def split_cents_evenly(
         participant_id: base_share + (1 if index < remainder else 0)
         for index, participant_id in enumerate(sorted_ids)
     }
-
-
-def find_trip_or_404(
-    db: Session,
-    trip_id: UUID,
-) -> Trip:
-    trip = db.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found",
-        )
-    return trip
 
 
 def find_expense_or_404(
@@ -146,8 +136,9 @@ def replace_expense_shares(
 def list_expenses(
     trip_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[Expense]:
-    find_trip_or_404(db, trip_id)
+    find_trip_or_404(db, trip_id, current_user)
 
     statement = (
         select(Expense)
@@ -170,8 +161,9 @@ def create_expense(
     trip_id: UUID,
     payload: ExpenseCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Expense:
-    trip = find_trip_or_404(db, trip_id)
+    trip = find_trip_or_404(db, trip_id, current_user)
     participant_ids = get_participant_ids(db, trip_id)
 
     expense_type = DBExpenseType(payload.expense_type.value)
@@ -222,8 +214,9 @@ def get_expense(
     trip_id: UUID,
     expense_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Expense:
-    find_trip_or_404(db, trip_id)
+    find_trip_or_404(db, trip_id, current_user)
     return find_expense_or_404(
         db,
         trip_id,
@@ -237,8 +230,9 @@ def update_expense(
     expense_id: UUID,
     payload: ExpenseUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Expense:
-    trip = find_trip_or_404(db, trip_id)
+    trip = find_trip_or_404(db, trip_id, current_user)
     expense = find_expense_or_404(
         db,
         trip_id,
@@ -320,8 +314,9 @@ def delete_expense(
     trip_id: UUID,
     expense_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    trip = find_trip_or_404(db, trip_id)
+    trip = find_trip_or_404(db, trip_id, current_user)
     expense = find_expense_or_404(
         db,
         trip_id,

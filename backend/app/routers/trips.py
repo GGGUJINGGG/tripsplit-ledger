@@ -6,20 +6,61 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.orm_models import Trip
+from app.orm_models import MemberRole, Trip, TripMember, User
 from app.schemas import TripCreate, TripRead, TripUpdate
+from app.auth_dependencies import get_current_user
 
 
-router = APIRouter(prefix="/trips", tags=["trips"])
+router = APIRouter(
+    prefix="/trips",
+    tags=["trips"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
-def find_trip_or_404(db: Session, trip_id: UUID) -> Trip:
-    trip = db.get(Trip, trip_id)
+def find_trip_or_404(
+    db: Session,
+    trip_id: UUID,
+    current_user: User,
+) -> Trip:
+    statement = (
+        select(Trip)
+        .join(TripMember)
+        .where(
+            Trip.id == trip_id,
+            TripMember.user_id == current_user.id,
+        )
+    )
+    trip = db.scalar(statement)
+
     if trip is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Trip not found",
         )
+
+    return trip
+
+
+def require_trip_owner(
+    db: Session,
+    trip_id: UUID,
+    current_user: User,
+) -> Trip:
+    trip = find_trip_or_404(db, trip_id, current_user)
+
+    membership = db.scalar(
+        select(TripMember).where(
+            TripMember.trip_id == trip_id,
+            TripMember.user_id == current_user.id,
+        )
+    )
+    if membership.role != MemberRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the trip owner can perform this action",
+        )
+
     return trip
 
 
@@ -60,8 +101,14 @@ def normalize_trip_updates(
 @router.get("", response_model=list[TripRead])
 def list_trips(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[Trip]:
-    statement = select(Trip).order_by(Trip.created_at.desc())
+    statement = (
+        select(Trip)
+        .join(TripMember)
+        .where(TripMember.user_id == current_user.id)
+        .order_by(Trip.created_at.desc())
+    )
     return list(db.scalars(statement).all())
 
 
@@ -73,11 +120,19 @@ def list_trips(
 def create_trip(
     payload: TripCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Trip:
     trip = Trip(
         name=payload.name,
         start_date=payload.start_date,
         end_date=payload.end_date,
+    )
+    trip.members.append(
+        TripMember(
+            user=current_user,
+            display_name=current_user.display_name,
+            role=MemberRole.OWNER,
+        )
     )
     db.add(trip)
     db.commit()
@@ -89,8 +144,9 @@ def create_trip(
 def get_trip(
     trip_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Trip:
-    return find_trip_or_404(db, trip_id)
+    return find_trip_or_404(db, trip_id, current_user)
 
 
 @router.put("/{trip_id}", response_model=TripRead)
@@ -98,8 +154,9 @@ def update_trip(
     trip_id: UUID,
     payload: TripUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Trip:
-    trip = find_trip_or_404(db, trip_id)
+    trip = require_trip_owner(db, trip_id, current_user)
     updates = normalize_trip_updates(trip, payload)
 
     for field, value in updates.items():
@@ -117,7 +174,8 @@ def update_trip(
 def delete_trip(
     trip_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    trip = find_trip_or_404(db, trip_id)
+    trip = require_trip_owner(db, trip_id, current_user)
     db.delete(trip)
     db.commit()

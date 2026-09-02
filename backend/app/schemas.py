@@ -84,6 +84,10 @@ class ParticipantCreate(BaseModel):
     name: str = Field(min_length=1)
 
 
+class MemberInvite(BaseModel):
+    email: EmailStr
+
+
 class ExpenseCreate(BaseModel):
     title: str = Field(min_length=1)
     amount: float = Field(gt=0)

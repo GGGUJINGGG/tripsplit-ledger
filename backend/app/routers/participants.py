@@ -6,27 +6,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.orm_models import Expense, ExpenseShare, Trip, TripMember
-from app.schemas import ParticipantCreate, ParticipantRead
+from app.orm_models import (
+    Expense,
+    ExpenseShare,
+    MemberRole,
+    TripMember,
+    User,
+)
+from app.schemas import MemberInvite, ParticipantCreate, ParticipantRead
+from app.auth_dependencies import get_current_user
+from app.routers.trips import find_trip_or_404, require_trip_owner
 
 
 router = APIRouter(
     prefix="/trips/{trip_id}/participants",
     tags=["participants"],
 )
-
-
-def find_trip_or_404(
-    db: Session,
-    trip_id: UUID,
-) -> Trip:
-    trip = db.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found",
-        )
-    return trip
 
 
 def find_member_or_404(
@@ -52,8 +47,9 @@ def find_member_or_404(
 def list_participants(
     trip_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[TripMember]:
-    find_trip_or_404(db, trip_id)
+    find_trip_or_404(db, trip_id, current_user)
 
     statement = (
         select(TripMember)
@@ -72,12 +68,62 @@ def create_participant(
     trip_id: UUID,
     payload: ParticipantCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> TripMember:
-    trip = find_trip_or_404(db, trip_id)
+    trip = find_trip_or_404(db, trip_id, current_user)
 
     member = TripMember(
         trip_id=trip.id,
         display_name=payload.name,
+    )
+    trip.updated_at = datetime.now(UTC)
+
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+@router.post(
+    "/invite",
+    response_model=ParticipantRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def invite_member(
+    trip_id: UUID,
+    payload: MemberInvite,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TripMember:
+    trip = require_trip_owner(db, trip_id, current_user)
+
+    normalized_email = str(payload.email).strip().lower()
+    invited_user = db.scalar(
+        select(User).where(User.email == normalized_email)
+    )
+    if invited_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No user found with that email",
+        )
+
+    existing_membership = db.scalar(
+        select(TripMember).where(
+            TripMember.trip_id == trip_id,
+            TripMember.user_id == invited_user.id,
+        )
+    )
+    if existing_membership is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is already a member of this trip",
+        )
+
+    member = TripMember(
+        trip_id=trip.id,
+        user_id=invited_user.id,
+        display_name=invited_user.display_name,
+        role=MemberRole.MEMBER,
     )
     trip.updated_at = datetime.now(UTC)
 
@@ -95,13 +141,20 @@ def delete_participant(
     trip_id: UUID,
     participant_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    trip = find_trip_or_404(db, trip_id)
+    trip = find_trip_or_404(db, trip_id, current_user)
     member = find_member_or_404(
         db,
         trip_id,
         participant_id,
     )
+
+    if member.role == MemberRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Trip owner cannot be deleted",
+        )
 
     paid_expense_id = db.scalar(
         select(Expense.id)

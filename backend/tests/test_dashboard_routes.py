@@ -1,7 +1,7 @@
-from tests.base import DatabaseTestCase
+from tests.base import AuthenticatedDatabaseTestCase
 
 
-class DashboardRouteTests(DatabaseTestCase):
+class DashboardRouteTests(AuthenticatedDatabaseTestCase):
     def test_dashboard_uses_database_expenses_and_shares(self) -> None:
         trip = self.client.post(
             "/api/trips",
@@ -78,3 +78,45 @@ class DashboardRouteTests(DatabaseTestCase):
             round(sum(owed.values()), 2),
             10,
         )
+
+    def test_cannot_access_another_users_dashboard(self) -> None:
+        register_response = self.client.post(
+            "/api/auth/register",
+            json={
+                "email": "dashboard-owner@example.com",
+                "password": "secure-password-456",
+                "display_name": "Dashboard Owner",
+            },
+        )
+        self.assertEqual(register_response.status_code, 201)
+
+        login_response = self.client.post(
+            "/api/auth/login",
+            json={
+                "email": "dashboard-owner@example.com",
+                "password": "secure-password-456",
+            },
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+        other_token = login_response.json()["access_token"]
+        other_headers = {
+            "Authorization": f"Bearer {other_token}"
+        }
+
+        trip_response = self.client.post(
+            "/api/trips",
+            headers=other_headers,
+            json={
+                "name": "Private Dashboard Trip",
+                "start_date": "2026-08-01",
+            },
+        )
+        self.assertEqual(trip_response.status_code, 201)
+        other_trip = trip_response.json()
+
+        response = self.client.get(
+            f"/api/trips/{other_trip['id']}/dashboard"
+        )
+
+        self.assertEqual(response.status_code, 404)
