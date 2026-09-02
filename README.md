@@ -17,8 +17,10 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 ## Features
 
 **Trip management**
-- Create, edit, and delete trips with date ranges
+- Create trips with date ranges
 - Per-trip dashboard showing total spending, shared spending, and personal spending at a glance
+- Invite another registered user to a trip by email (owner-only)
+- Trip renaming and deletion are enforced as owner-only by the API but don't have frontend UI yet
 
 **Expenses**
 - Add, edit, and delete expenses with title, amount, category, date, payer, currency, and an optional note
@@ -54,6 +56,87 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 - Production deployment for the API, database, and frontend
 - Exchange-rate conversion to enable settlements across mixed-currency trips
 - Budget tracking per trip or per category
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client["Browser"]
+        FE["React 19 + Vite SPA<br/>JWT stored in localStorage"]
+    end
+
+    subgraph Server["FastAPI backend"]
+        Auth["/api/auth<br/>register · login · me"]
+        Trips["/api/trips<br/>trips · participants · expenses"]
+        Dash["/api/trips/{id}/dashboard"]
+        Settle["/api/trips/{id}/settlements"]
+    end
+
+    DB[("PostgreSQL<br/>SQLAlchemy 2.0 + Alembic")]
+
+    FE -- "HTTPS, Bearer JWT" --> Auth
+    FE -- "HTTPS, Bearer JWT" --> Trips
+    FE -- "HTTPS, Bearer JWT" --> Dash
+    FE -- "HTTPS, Bearer JWT" --> Settle
+    Auth --> DB
+    Trips --> DB
+    Dash --> DB
+    Settle --> DB
+```
+
+Every route except `/api/auth/register` and `/api/auth/login` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables — the frontend consumes those endpoints directly rather than recomputing balances client-side.
+
+### Database schema
+
+```mermaid
+erDiagram
+    USERS ||--o{ TRIP_MEMBERS : "has (nullable once removed)"
+    TRIPS ||--o{ TRIP_MEMBERS : "has"
+    TRIPS ||--o{ EXPENSES : "has"
+    TRIP_MEMBERS ||--o{ EXPENSES : "pays for"
+    EXPENSES ||--o{ EXPENSE_SHARES : "split into"
+    TRIP_MEMBERS ||--o{ EXPENSE_SHARES : "owes"
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        string display_name
+    }
+    TRIPS {
+        uuid id PK
+        string name
+        date start_date
+        date end_date
+    }
+    TRIP_MEMBERS {
+        uuid id PK
+        uuid trip_id FK
+        uuid user_id FK "nullable, SET NULL on user delete"
+        string display_name
+        enum role "owner | member"
+    }
+    EXPENSES {
+        uuid id PK
+        uuid trip_id FK
+        uuid paid_by_id FK
+        string title
+        int amount_cents
+        enum expense_type "shared | personal"
+        enum category
+        date date
+        string currency
+        text note
+    }
+    EXPENSE_SHARES {
+        uuid id PK
+        uuid expense_id FK
+        uuid member_id FK
+        int amount_cents
+    }
+```
+
+`trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `expenses.amount_cents` and `expense_shares.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill; see [Calculation Logic](#calculation-logic).
 
 ## Backend Setup
 
@@ -134,6 +217,7 @@ Participants:
 ```text
 GET    /api/trips/{trip_id}/participants
 POST   /api/trips/{trip_id}/participants
+POST   /api/trips/{trip_id}/participants/invite
 DELETE /api/trips/{trip_id}/participants/{participant_id}
 ```
 
@@ -210,3 +294,11 @@ python -m unittest discover -s tests
 ```
 
 Each integration test runs inside a database transaction that is rolled back after the test.
+
+Frontend tests use Vitest and React Testing Library and don't need a database or a running backend — API calls are mocked. Run them from the `frontend` directory:
+
+```bash
+npm test
+```
+
+Both suites run in CI on every push and pull request (see the badge at the top of this README).
