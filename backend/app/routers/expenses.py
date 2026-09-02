@@ -18,6 +18,7 @@ from app.orm_models import (
 )
 from app.routers.trips import find_trip_or_404
 from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate
+from app.services.calculations import split_cents_evenly
 
 
 router = APIRouter(
@@ -28,22 +29,6 @@ router = APIRouter(
 
 def amount_to_cents(amount: float) -> int:
     return round(amount * 100)
-
-
-def split_cents_evenly(
-    amount_cents: int,
-    participant_ids: list[UUID],
-) -> dict[UUID, int]:
-    sorted_ids = sorted(participant_ids, key=str)
-    base_share, remainder = divmod(
-        amount_cents,
-        len(sorted_ids),
-    )
-
-    return {
-        participant_id: base_share + (1 if index < remainder else 0)
-        for index, participant_id in enumerate(sorted_ids)
-    }
 
 
 def find_expense_or_404(
