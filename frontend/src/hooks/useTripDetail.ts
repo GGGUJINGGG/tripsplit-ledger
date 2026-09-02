@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { getDashboard } from "../api/dashboard";
 import { createExpense, deleteExpense, updateExpense } from "../api/expenses";
 import { createParticipant, deleteParticipant } from "../api/participants";
 import { getSettlements } from "../api/settlements";
 import { getTrip } from "../api/trips";
-import type { Expense, ExpenseCreate, ExpenseUpdate, Settlement, Trip } from "../types";
+import type {
+  DashboardSummary,
+  Expense,
+  ExpenseCreate,
+  ExpenseUpdate,
+  Settlement,
+  Trip,
+} from "../types";
 import { type CurrencyCode, currencies, normalizeCurrency } from "../utils/currency";
 import { getExpenseType } from "../utils/expenses";
 
 export function useTripDetail(tripId: string | undefined) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,12 +31,14 @@ export function useTripDetail(tripId: string | undefined) {
     }
     setError(null);
     try {
-      const [nextTrip, settlementSummary] = await Promise.all([
+      const [nextTrip, settlementSummary, dashboardSummary] = await Promise.all([
         getTrip(tripId),
         getSettlements(tripId),
+        getDashboard(tripId),
       ]);
       setTrip(nextTrip);
       setSettlements(settlementSummary.settlements);
+      setDashboard(dashboardSummary);
       return nextTrip;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load trip");
@@ -104,58 +115,45 @@ export function useTripDetail(tripId: string | undefined) {
       .sort((first, second) => second.total - first.total);
   }, [trip]);
 
+  const tripCurrencyCodes = useMemo(() => {
+    return Array.from(
+      new Set((trip?.expenses ?? []).map((expense) => normalizeCurrency(expense.currency))),
+    );
+  }, [trip]);
+
+  const settlementCurrency =
+    tripCurrencyCodes.length <= 1 ? tripCurrencyCodes[0] ?? "USD" : null;
+
+  // Paid and personal totals are trivial per-currency sums with no
+  // splitting logic, so they're safe to compute here. Shared
+  // responsibility and net balance come from the backend's /dashboard
+  // response below instead of reimplementing the split algorithm in JS
+  // (the backend is the single source of truth for that math).
   const participantSpendingSummary = useMemo(() => {
+    const owedByParticipant = new Map(
+      dashboard?.owed_by_person.map((item) => [item.participant_id, item.amount]) ?? [],
+    );
+    const netBalanceByParticipant = new Map(
+      dashboard?.net_balances.map((item) => [item.participant_id, item.balance]) ?? [],
+    );
+
     return (trip?.participants ?? []).map((participant) => {
       const paid = new Map<CurrencyCode, number>();
-      const sharedPaid = new Map<CurrencyCode, number>();
-      const sharedResponsibility = new Map<CurrencyCode, number>();
       const personal = new Map<CurrencyCode, number>();
 
       for (const expense of trip?.expenses ?? []) {
+        if (expense.paid_by !== participant.id) continue;
+
         const expenseCurrency = normalizeCurrency(expense.currency);
-        if (expense.paid_by === participant.id) {
-          paid.set(expenseCurrency, (paid.get(expenseCurrency) ?? 0) + expense.amount);
-        }
+        paid.set(expenseCurrency, (paid.get(expenseCurrency) ?? 0) + expense.amount);
 
         if (getExpenseType(expense) === "personal") {
-          if (expense.paid_by === participant.id) {
-            personal.set(
-              expenseCurrency,
-              (personal.get(expenseCurrency) ?? 0) + expense.amount,
-            );
-          }
-          continue;
-        }
-
-        if (expense.paid_by === participant.id) {
-          sharedPaid.set(
+          personal.set(
             expenseCurrency,
-            (sharedPaid.get(expenseCurrency) ?? 0) + expense.amount,
-          );
-        }
-
-        if (expense.split_among.includes(participant.id)) {
-          const amountCents = Math.round(expense.amount * 100);
-          const sortedIds = [...expense.split_among].sort();
-          const baseCents = Math.floor(amountCents / sortedIds.length);
-          const remainder = amountCents % sortedIds.length;
-          const participantIndex = sortedIds.indexOf(participant.id);
-          const shareCents = baseCents + (participantIndex < remainder ? 1 : 0);
-          sharedResponsibility.set(
-            expenseCurrency,
-            (sharedResponsibility.get(expenseCurrency) ?? 0) + shareCents / 100,
+            (personal.get(expenseCurrency) ?? 0) + expense.amount,
           );
         }
       }
-
-      const currencyCodes = new Set<CurrencyCode>([
-        ...sharedPaid.keys(),
-        ...sharedResponsibility.keys(),
-      ]);
-      const netBalances = Array.from(currencyCodes).map((code) => ({
-        currency: code,
-        amount: (sharedPaid.get(code) ?? 0) - (sharedResponsibility.get(code) ?? 0),
-      }));
 
       const toMoneyList = (source: Map<CurrencyCode, number>) =>
         currencies
@@ -165,24 +163,26 @@ export function useTripDetail(tripId: string | undefined) {
           }))
           .filter((item) => item.amount > 0);
 
+      const owedAmount = owedByParticipant.get(participant.id) ?? 0;
+      const netBalance = netBalanceByParticipant.get(participant.id) ?? 0;
+
       return {
         participant,
         paid: toMoneyList(paid),
-        sharedResponsibility: toMoneyList(sharedResponsibility),
         personal: toMoneyList(personal),
-        netBalances,
+        sharedResponsibility:
+          settlementCurrency !== null
+            ? [{ currency: settlementCurrency, amount: owedAmount }].filter(
+                (item) => item.amount > 0,
+              )
+            : [],
+        netBalances:
+          settlementCurrency !== null
+            ? [{ currency: settlementCurrency, amount: netBalance }]
+            : [],
       };
     });
-  }, [trip]);
-
-  const tripCurrencyCodes = useMemo(() => {
-    return Array.from(
-      new Set((trip?.expenses ?? []).map((expense) => normalizeCurrency(expense.currency))),
-    );
-  }, [trip]);
-
-  const settlementCurrency =
-    tripCurrencyCodes.length <= 1 ? tripCurrencyCodes[0] ?? "USD" : null;
+  }, [trip, dashboard, settlementCurrency]);
 
   async function addParticipant(name: string): Promise<void> {
     if (!tripId || !name.trim()) return;

@@ -50,13 +50,17 @@ export default function ParticipantSummary({
                     <strong>{item.participant.name}</strong>
                   </td>
                   <td>{formatMoneyItems(item.paid)}</td>
-                  <td>{formatMoneyItems(item.sharedResponsibility)}</td>
+                  <td>
+                    {settlementCurrency === null
+                      ? "Mixed currencies"
+                      : formatMoneyItems(item.sharedResponsibility)}
+                  </td>
                   <td>{formatMoneyItems(item.personal)}</td>
                   <td>
-                    {item.netBalances.length === 0
-                      ? "USD 0.00"
-                      : settlementCurrency === null
-                        ? "Mixed currencies"
+                    {settlementCurrency === null
+                      ? "Mixed currencies"
+                      : item.netBalances.length === 0
+                        ? "USD 0.00"
                         : item.netBalances
                             .map((balance) =>
                               formatSignedMoney(balance.currency, balance.amount),

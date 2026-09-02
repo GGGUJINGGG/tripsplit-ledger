@@ -46,7 +46,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 ## Known Limitations
 
 - **Local development only** — accounts, login, and trip-level authorization are implemented, but the app is not deployed anywhere yet. Running it requires a local PostgreSQL instance and backend/frontend processes.
-- **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented.
+- **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
 - **Local development setup** — PostgreSQL currently runs through Docker Compose. Production database configuration and hosted deployment are not yet included.
 
 ## Planned

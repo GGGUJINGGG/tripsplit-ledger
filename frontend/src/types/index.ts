@@ -77,6 +77,37 @@ export interface SettlementSummary {
   settlements: Settlement[];
 }
 
+export interface CategorySpending {
+  category: ExpenseCategory;
+  amount: number;
+}
+
+export interface DailySpending {
+  date: string;
+  amount: number;
+}
+
+export interface PersonAmount {
+  participant_id: string;
+  name: string;
+  amount: number;
+}
+
+export interface PersonBalance {
+  participant_id: string;
+  name: string;
+  balance: number;
+}
+
+export interface DashboardSummary {
+  total_trip_spending: number;
+  spending_by_category: CategorySpending[];
+  spending_by_day: DailySpending[];
+  paid_by_person: PersonAmount[];
+  owed_by_person: PersonAmount[];
+  net_balances: PersonBalance[];
+}
+
 export interface User{
   id: string;
   email: string;
