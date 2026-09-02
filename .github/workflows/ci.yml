@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tripsplit
+          POSTGRES_PASSWORD: tripsplit
+          POSTGRES_DB: tripsplit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tripsplit -d tripsplit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://tripsplit:tripsplit@localhost:5432/tripsplit
+      TEST_DATABASE_URL: postgresql+psycopg://tripsplit:tripsplit@localhost:5432/tripsplit_test
+      JWT_SECRET_KEY: ci-only-secret-not-used-outside-github-actions
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create test database
+        run: PGPASSWORD=tripsplit psql -h localhost -U tripsplit -d tripsplit -c "CREATE DATABASE tripsplit_test;"
+
+      - name: Run Alembic migrations (app database)
+        run: alembic upgrade head
+
+      - name: Run Alembic migrations (test database)
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+psycopg://tripsplit:tripsplit@localhost:5432/tripsplit_test
+
+      - name: Run backend tests
+        run: python -m unittest discover -s tests
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

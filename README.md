@@ -1,5 +1,7 @@
 # TripSplit Ledger
 
+[![CI](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml)
+
 After a group trip, I used Splitwise to settle expenses with friends and ran into a few frustrations: the free tier limits how many expenses you can log per day, and it doesn't show a full spending breakdown for the trip — only who owes whom. I wanted to see total spending by category, by day, and per person, not just the final settlement numbers.
 
 That gap was the starting point. As I logged our actual trip expenses into an early version of this app, I kept noticing other things I wanted — filtering, expense types, CSV export, a per-person spending summary — and added them one by one. TripSplit Ledger is the result: a personal expense tracker built around how I actually think about group travel spending.
@@ -43,15 +45,12 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 
 ## Known Limitations
 
-- **Single-user, local only** — there is no authentication system yet. All trips are visible to anyone with access to the running instance. This works fine for personal use on a local machine, but is not suitable for shared or hosted deployment.
+- **Local development only** — accounts, login, and trip-level authorization are implemented, but the app is not deployed anywhere yet. Running it requires a local PostgreSQL instance and backend/frontend processes.
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented.
 - **Local development setup** — PostgreSQL currently runs through Docker Compose. Production database configuration and hosted deployment are not yet included.
 
 ## Planned
 
-- User accounts with registration and login (JWT-based authentication)
-- Trip-level authorization for owners and members
-- CI with a PostgreSQL test service and Alembic migration checks
 - Production deployment for the API, database, and frontend
 - Exchange-rate conversion to enable settlements across mixed-currency trips
 - Budget tracking per trip or per category

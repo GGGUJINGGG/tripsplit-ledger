@@ -188,18 +188,6 @@ export default function TripDetailPage() {
       .filter((item) => item.amount > 0);
   }, [trip]);
 
-  const averageSpendingByCurrency = useMemo(() => {
-    const participantCount = trip?.participants.length ?? 0;
-    if (participantCount === 0) {
-      return [];
-    }
-
-    return spendingByCurrency.map((item) => ({
-      currency: item.currency,
-      amount: item.amount / participantCount,
-    }));
-  }, [spendingByCurrency, trip]);
-
   const filteredExpenses = useMemo(() => {
     const normalizedSearch = expenseSearch.trim().toLowerCase();
 
