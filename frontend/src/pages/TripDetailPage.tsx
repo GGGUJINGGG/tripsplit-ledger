@@ -30,6 +30,7 @@ export default function TripDetailPage() {
     participantSpendingSummary,
     settlementCurrency,
     addParticipant,
+    inviteMember,
     removeParticipant,
     saveExpense,
     removeExpense,
@@ -105,6 +106,7 @@ export default function TripDetailPage() {
           participants={trip.participants}
           isSaving={isSaving}
           onAdd={addParticipant}
+          onInvite={inviteMember}
           onRemove={removeParticipant}
         />
 

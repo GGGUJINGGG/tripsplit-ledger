@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getDashboard } from "../api/dashboard";
 import { createExpense, deleteExpense, updateExpense } from "../api/expenses";
-import { createParticipant, deleteParticipant } from "../api/participants";
+import {
+  createParticipant,
+  deleteParticipant,
+  inviteParticipant,
+} from "../api/participants";
 import { getSettlements } from "../api/settlements";
 import { getTrip } from "../api/trips";
 import type {
@@ -191,9 +195,26 @@ export function useTripDetail(tripId: string | undefined) {
     setError(null);
     try {
       await createParticipant(tripId, { name: name.trim() });
-      await loadTrip();
+      await loadTrip(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add participant");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function inviteMember(email: string): Promise<boolean> {
+    if (!tripId || !email.trim()) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await inviteParticipant(tripId, { email: email.trim() });
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to invite that person");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -206,7 +227,7 @@ export function useTripDetail(tripId: string | undefined) {
     setError(null);
     try {
       await deleteParticipant(tripId, participantId);
-      await loadTrip();
+      await loadTrip(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to remove participant");
     } finally {
@@ -244,7 +265,7 @@ export function useTripDetail(tripId: string | undefined) {
     setError(null);
     try {
       await deleteExpense(tripId, expense.id);
-      await loadTrip();
+      await loadTrip(false);
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete expense");
@@ -269,6 +290,7 @@ export function useTripDetail(tripId: string | undefined) {
     participantSpendingSummary,
     settlementCurrency,
     addParticipant,
+    inviteMember,
     removeParticipant,
     saveExpense,
     removeExpense,

@@ -517,6 +517,12 @@ th {
   padding: 8px 10px;
 }
 
+.panel-subsection {
+  border-top: 1px solid #e5eaf0;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
 .auth-page {
   align-items: center;
   display: flex;

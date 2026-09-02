@@ -51,6 +51,10 @@ export interface ParticipantCreate {
   name: string;
 }
 
+export interface ParticipantInvite {
+  email: string;
+}
+
 export interface ExpenseCreate {
   title: string;
   amount: number;

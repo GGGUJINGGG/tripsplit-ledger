@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, UserPlus } from "lucide-react";
 
 import type { Participant } from "../../types";
 
@@ -7,6 +7,7 @@ interface ParticipantsPanelProps {
   participants: Participant[];
   isSaving: boolean;
   onAdd: (name: string) => Promise<void>;
+  onInvite: (email: string) => Promise<boolean>;
   onRemove: (participantId: string) => Promise<void>;
 }
 
@@ -14,15 +15,30 @@ export default function ParticipantsPanel({
   participants,
   isSaving,
   onAdd,
+  onInvite,
   onRemove,
 }: ParticipantsPanelProps) {
   const [name, setName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteConfirmation, setInviteConfirmation] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return;
     await onAdd(name);
     setName("");
+  }
+
+  async function handleInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    setInviteConfirmation(null);
+    const succeeded = await onInvite(inviteEmail);
+    if (succeeded) {
+      setInviteConfirmation(`Invited ${inviteEmail.trim()} to this trip.`);
+      setInviteEmail("");
+    }
   }
 
   async function handleRemove(participant: Participant) {
@@ -78,6 +94,40 @@ export default function ParticipantsPanel({
             </div>
           ))
         )}
+      </div>
+
+      <div className="panel-subsection">
+        <p className="field-hint">
+          Invite someone who already has a TripSplit account. Only the trip owner
+          can invite new members.
+        </p>
+        <form className="inline-form" onSubmit={handleInvite}>
+          <label htmlFor="invite-email" className="sr-only">
+            Invite by email
+          </label>
+          <input
+            id="invite-email"
+            type="email"
+            value={inviteEmail}
+            onChange={(event) => {
+              setInviteEmail(event.target.value);
+              setInviteConfirmation(null);
+            }}
+            placeholder="person@example.com"
+          />
+          <button
+            className="icon-button"
+            type="submit"
+            disabled={isSaving}
+            aria-label="Send invite"
+            title="Send invite"
+          >
+            <UserPlus size={18} />
+          </button>
+        </form>
+        {inviteConfirmation ? (
+          <p className="field-hint">{inviteConfirmation}</p>
+        ) : null}
       </div>
     </section>
   );
