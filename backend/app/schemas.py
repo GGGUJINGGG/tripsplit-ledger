@@ -3,9 +3,27 @@ from datetime import date as DataType, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
+from app.currencies import VALID_CURRENCY_CODES
 from app.orm_models import ExpenseCategory, ExpenseType
+
+
+def _validate_currency_code(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+
+    normalized = value.upper()
+    if normalized not in VALID_CURRENCY_CODES:
+        raise ValueError(f"Unknown currency code: {value}")
+    return normalized
 
 
 class UserCreate(BaseModel):
@@ -99,6 +117,10 @@ class ExpenseCreate(BaseModel):
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     note: Optional[str] = None
 
+    _validate_currency = field_validator("currency")(
+        _validate_currency_code
+    )
+
 
 class ExpenseUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1)
@@ -110,6 +132,10 @@ class ExpenseUpdate(BaseModel):
     date: Optional[DataType] = None
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     note: Optional[str] = None
+
+    _validate_currency = field_validator("currency")(
+        _validate_currency_code
+    )
 
 
 class ExpenseRead(BaseModel):

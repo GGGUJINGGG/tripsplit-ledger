@@ -8,7 +8,7 @@ from app.auth_dependencies import get_current_user
 from app.database import get_db
 from app.orm_models import Expense, Trip, TripMember, User
 from app.schemas import SettlementSummary
-from app.services.settlements import simplify_settlements
+from app.services.settlements import MixedCurrencyError, simplify_settlements
 
 
 router = APIRouter(
@@ -44,4 +44,10 @@ def get_settlements(
             detail="Trip not found",
         )
 
-    return simplify_settlements(trip)
+    try:
+        return simplify_settlements(trip)
+    except MixedCurrencyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc

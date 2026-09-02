@@ -2,8 +2,11 @@ import unittest
 from types import SimpleNamespace
 
 from app.orm_models import ExpenseCategory, ExpenseType
-from app.services.calculations import build_dashboard_summary
-from app.services.settlements import simplify_settlements
+from app.services.calculations import (
+    build_dashboard_summary,
+    split_cents_evenly,
+)
+from app.services.settlements import MixedCurrencyError, simplify_settlements
 
 
 class CalculationTests(unittest.TestCase):
@@ -122,6 +125,31 @@ class CalculationTests(unittest.TestCase):
             ],
             [("sam", "alex", 100), ("maya", "alex", 40)],
         )
+
+    def test_settlements_reject_mixed_currency_shared_expenses(self) -> None:
+        self.trip.expenses[1].currency = "EUR"
+
+        with self.assertRaises(MixedCurrencyError):
+            simplify_settlements(self.trip)
+
+
+class SplitCentsEvenlyTests(unittest.TestCase):
+    def test_one_cent_split_among_multiple_participants(self) -> None:
+        shares = split_cents_evenly(1, ["alex", "maya", "sam"])
+
+        self.assertEqual(sum(shares.values()), 1)
+        self.assertEqual(
+            sorted(shares.values()),
+            [0, 0, 1],
+        )
+
+    def test_split_result_independent_of_input_order(self) -> None:
+        forward = split_cents_evenly(10, ["alex", "maya", "sam"])
+        reversed_order = split_cents_evenly(
+            10, ["sam", "maya", "alex"]
+        )
+
+        self.assertEqual(forward, reversed_order)
 
 
 if __name__ == "__main__":

@@ -5,11 +5,27 @@ from app.services.calculations import (
     cents_to_float,
     get_participant_name,
     get_participants,
+    is_shared_expense,
     net_balances_cents,
 )
 
 
+class MixedCurrencyError(ValueError):
+    pass
+
+
 def simplify_settlements(trip: Any) -> SettlementSummary:
+    shared_currencies = {
+        expense.currency
+        for expense in trip.expenses
+        if is_shared_expense(expense)
+    }
+    if len(shared_currencies) > 1:
+        raise MixedCurrencyError(
+            "Trip has shared expenses in multiple currencies; "
+            "cannot generate settlements"
+        )
+
     balances = net_balances_cents(trip)
     participants = get_participants(trip)
 

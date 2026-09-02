@@ -147,6 +147,57 @@ class SettlementRouteTests(AuthenticatedDatabaseTestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_settlements_reject_mixed_currency_trip(self) -> None:
+        trip = self.client.post(
+            "/api/trips",
+            json={
+                "name": "Mixed Currency Trip",
+                "start_date": "2026-07-01",
+            },
+        ).json()
+
+        alex = self.client.post(
+            f"/api/trips/{trip['id']}/participants",
+            json={"name": "Alex"},
+        ).json()
+        maya = self.client.post(
+            f"/api/trips/{trip['id']}/participants",
+            json={"name": "Maya"},
+        ).json()
+
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Hotel",
+                "amount": 100,
+                "paid_by": alex["id"],
+                "split_among": [alex["id"], maya["id"]],
+                "expense_type": "shared",
+                "category": "hotel",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+        )
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Dinner",
+                "amount": 50,
+                "paid_by": maya["id"],
+                "split_among": [alex["id"], maya["id"]],
+                "expense_type": "shared",
+                "category": "food",
+                "date": "2026-07-01",
+                "currency": "EUR",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/trips/{trip['id']}/settlements"
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_settlements_require_authentication(self) -> None:
         trip = self.client.post(
             "/api/trips",

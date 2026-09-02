@@ -210,6 +210,59 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_create_expense_rejects_unknown_currency_code(self) -> None:
+        trip = self.client.post(
+            "/api/trips",
+            json={"name": "Currency Test", "start_date": "2026-07-01"},
+        ).json()
+        alex = self.client.post(
+            f"/api/trips/{trip['id']}/participants",
+            json={"name": "Alex"},
+        ).json()
+
+        response = self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Tickets",
+                "amount": 100,
+                "paid_by": alex["id"],
+                "split_among": [alex["id"]],
+                "expense_type": "shared",
+                "category": "tickets",
+                "date": "2026-07-01",
+                "currency": "ABC",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_expense_accepts_known_non_usd_currency(self) -> None:
+        trip = self.client.post(
+            "/api/trips",
+            json={"name": "Currency Test", "start_date": "2026-07-01"},
+        ).json()
+        alex = self.client.post(
+            f"/api/trips/{trip['id']}/participants",
+            json={"name": "Alex"},
+        ).json()
+
+        response = self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Tickets",
+                "amount": 100,
+                "paid_by": alex["id"],
+                "split_among": [alex["id"]],
+                "expense_type": "shared",
+                "category": "tickets",
+                "date": "2026-07-01",
+                "currency": "eur",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["currency"], "EUR")
+
     def test_update_expense_rejects_payer_from_another_trip(self) -> None:
         trip = self.client.post(
             "/api/trips",
