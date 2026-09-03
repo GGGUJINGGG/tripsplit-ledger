@@ -501,6 +501,22 @@ th {
   border-color: #f6c7a4;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.secondary-button.danger {
+  color: #9f1f14;
+}
+
+.secondary-button.danger:hover {
+  background: #fff4ed;
+  border-color: #f6c7a4;
+}
+
 .list-stack {
   display: grid;
   gap: 8px;
@@ -616,6 +632,14 @@ th {
 
   .filter-actions .secondary-button {
     width: 100%;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .secondary-button {
+    flex: 1 1 auto;
   }
 }
 

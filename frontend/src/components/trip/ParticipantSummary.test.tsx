@@ -9,7 +9,7 @@ describe("ParticipantSummary", () => {
       <ParticipantSummary
         summary={[
           {
-            participant: { id: "p1", name: "Alex" },
+            participant: { id: "p1", name: "Alex", role: "owner" },
             paid: [{ currency: "USD", amount: 100 }],
             sharedResponsibility: [{ currency: "USD", amount: 40 }],
             personal: [],
@@ -31,7 +31,7 @@ describe("ParticipantSummary", () => {
       <ParticipantSummary
         summary={[
           {
-            participant: { id: "p1", name: "Alex" },
+            participant: { id: "p1", name: "Alex", role: "owner" },
             paid: [
               { currency: "USD", amount: 100 },
               { currency: "EUR", amount: 20 },

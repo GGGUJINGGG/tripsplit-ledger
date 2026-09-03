@@ -9,10 +9,13 @@ export type ExpenseCategory =
 
 export type ExpenseType = "shared" | "personal";
 
+export type MemberRole = "owner" | "member";
+
 export interface Participant {
   id: string;
   name: string;
   user_id?: string | null;
+  role: MemberRole;
 }
 
 export interface Expense {
@@ -47,6 +50,8 @@ export interface TripCreate {
   start_date: string;
   end_date?: string;
 }
+
+export type TripUpdate = Partial<TripCreate>;
 
 export interface ParticipantCreate {
   name: string;

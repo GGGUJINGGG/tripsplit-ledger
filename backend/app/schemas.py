@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 from app.currencies import VALID_CURRENCY_CODES
-from app.orm_models import ExpenseCategory, ExpenseType
+from app.orm_models import ExpenseCategory, ExpenseType, MemberRole
 
 
 def _validate_currency_code(value: Optional[str]) -> Optional[str]:
@@ -95,6 +95,7 @@ class ParticipantRead(BaseModel):
     id: UUID
     name: str = Field(validation_alias="display_name")
     user_id: Optional[UUID] = None
+    role: MemberRole
 
 
 class TripRead(BaseModel):

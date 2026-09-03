@@ -10,8 +10,8 @@ const trip: Trip = {
   start_date: "2026-07-01",
   end_date: null,
   participants: [
-    { id: "p1", name: "Alex" },
-    { id: "p2", name: "Maya" },
+    { id: "p1", name: "Alex", role: "owner" },
+    { id: "p2", name: "Maya", role: "member" },
   ],
   expenses: [
     {

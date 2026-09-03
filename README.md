@@ -22,7 +22,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 - Create trips with date ranges
 - Per-trip dashboard showing total spending, shared spending, and personal spending at a glance
 - Invite another registered user to a trip by email (owner-only)
-- Trip renaming and deletion are enforced as owner-only by the API but don't have frontend UI yet
+- Trip renaming and deletion, owner-only and enforced by the API
 
 **Expenses**
 - Add, edit, and delete expenses with title, amount, category, date, payer, currency, and an optional note
@@ -50,7 +50,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 ## Known Limitations
 
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
-- **No frontend UI for trip renaming/deletion or inviting members beyond the invite form** — the API enforces owner-only rules for these, but only invite-by-email has a frontend entry point today.
+- **No frontend UI for inviting members beyond the invite-by-email form** — the API also enforces owner-only rules here, but there's no bulk invite or member-management screen beyond that one form.
 - **Password reset emails aren't actually emailed** — no transactional email provider (SES, Resend, SendGrid, ...) is configured, so `POST /auth/forgot-password` logs the reset link server-side instead of sending it. The rest of the flow (single-use, hashed, time-limited tokens; forced logout of other sessions on reset) is real and tested; only the delivery mechanism is a stand-in.
 - **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
 - **Error monitoring (Sentry) is wired up but not turned on** — the backend logs structured JSON for every request (method, path, status, duration) by default, but exception tracking via Sentry only activates if `SENTRY_DSN` is set (see `backend/.env.example`); no Sentry project is configured for this deployment.

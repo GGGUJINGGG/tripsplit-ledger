@@ -8,7 +8,7 @@ import {
   inviteParticipant,
 } from "../api/participants";
 import { getSettlements } from "../api/settlements";
-import { getTrip } from "../api/trips";
+import { deleteTrip, getTrip, updateTrip } from "../api/trips";
 import type {
   DashboardSummary,
   Expense,
@@ -16,6 +16,7 @@ import type {
   ExpenseUpdate,
   Settlement,
   Trip,
+  TripUpdate,
 } from "../types";
 import { type CurrencyCode, currencies, normalizeCurrency } from "../utils/currency";
 import { getExpenseType } from "../utils/expenses";
@@ -220,6 +221,39 @@ export function useTripDetail(tripId: string | undefined) {
     }
   }
 
+  async function renameTrip(payload: TripUpdate): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await updateTrip(tripId, payload);
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update trip");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function removeTrip(): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await deleteTrip(tripId);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete trip");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function removeParticipant(participantId: string): Promise<void> {
     if (!tripId) return;
 
@@ -294,6 +328,8 @@ export function useTripDetail(tripId: string | undefined) {
     removeParticipant,
     saveExpense,
     removeExpense,
+    renameTrip,
+    removeTrip,
   };
 }
 
