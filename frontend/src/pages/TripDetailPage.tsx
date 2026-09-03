@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import CategoryBreakdown from "../components/trip/CategoryBreakdown";
@@ -38,6 +38,15 @@ export default function TripDetailPage() {
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const filters = useExpenseFilters(trip?.expenses ?? []);
+  const expenseFormRef = useRef<HTMLDivElement>(null);
+
+  function startEditingExpense(expense: Expense) {
+    setEditingExpenseId(expense.id);
+    expenseFormRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   if (isLoading) {
     return <p className="empty-state">Loading trip...</p>;
@@ -110,13 +119,15 @@ export default function TripDetailPage() {
           onRemove={removeParticipant}
         />
 
-        <ExpenseForm
-          participants={trip.participants}
-          editingExpense={editingExpense}
-          isSaving={isSaving}
-          onCancelEdit={() => setEditingExpenseId(null)}
-          onSubmit={handleSaveExpense}
-        />
+        <div ref={expenseFormRef}>
+          <ExpenseForm
+            participants={trip.participants}
+            editingExpense={editingExpense}
+            isSaving={isSaving}
+            onCancelEdit={() => setEditingExpenseId(null)}
+            onSubmit={handleSaveExpense}
+          />
+        </div>
       </div>
 
       <CategoryBreakdown categorySummary={categorySummary} />
@@ -127,7 +138,7 @@ export default function TripDetailPage() {
         participantNames={participantNames}
         filters={filters}
         isSaving={isSaving}
-        onEdit={(expense) => setEditingExpenseId(expense.id)}
+        onEdit={startEditingExpense}
         onDelete={handleDeleteExpense}
         onExportCsv={handleExportCsv}
       />
