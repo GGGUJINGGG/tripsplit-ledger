@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.orm_models import User
+from app.rate_limit import reset_rate_limits
 from app.security import create_access_token, hash_password
 
 
@@ -25,6 +26,13 @@ class DatabaseTestCase(unittest.TestCase):
     client: TestClient
 
     def setUp(self) -> None:
+        # Rate limiting is disabled by default so it doesn't interfere
+        # with tests that call login/register repeatedly. Tests that
+        # target the rate limiter itself flip this on and reset the
+        # counters afterward.
+        settings.rate_limit_enabled = False
+        reset_rate_limits()
+
         self.connection = test_engine.connect()
         self.transaction = self.connection.begin()
         self.session = Session(
@@ -44,6 +52,8 @@ class DatabaseTestCase(unittest.TestCase):
         self.session.close()
         self.transaction.rollback()
         self.connection.close()
+        settings.rate_limit_enabled = False
+        reset_rate_limits()
 
 
 class AuthenticatedDatabaseTestCase(DatabaseTestCase):
