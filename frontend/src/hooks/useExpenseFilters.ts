@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Expense, ExpenseCategory, ExpenseType } from "../types";
 import { getExpenseType } from "../utils/expenses";
 
 export type ExpenseSortOption = "newest" | "oldest" | "highest" | "lowest";
 export type ExpenseTypeFilter = "all" | ExpenseType;
+
+export const EXPENSE_PAGE_SIZE = 25;
 
 export function useExpenseFilters(expenses: Expense[]) {
   const [filterCategory, setFilterCategory] = useState<ExpenseCategory | "all">("all");
@@ -85,6 +87,41 @@ export function useExpenseFilters(expenses: Expense[]) {
     setExpenseSearch("");
   }
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredExpenses.length / EXPENSE_PAGE_SIZE),
+  );
+
+  // Changing what's filtered/sorted jumps back to page 1 — staying on
+  // "page 3" of a different result set would be confusing.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filterCategory,
+    filterPaidBy,
+    filterStartDate,
+    filterEndDate,
+    expenseSearch,
+    expenseSort,
+    expenseTypeFilter,
+  ]);
+
+  // Separately, if the page count itself shrinks (e.g. an expense on
+  // the current page gets deleted) clamp down instead of showing blank.
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const paginatedExpenses = useMemo(
+    () =>
+      filteredExpenses.slice(
+        (currentPage - 1) * EXPENSE_PAGE_SIZE,
+        currentPage * EXPENSE_PAGE_SIZE,
+      ),
+    [filteredExpenses, currentPage],
+  );
+
   return {
     filterCategory,
     setFilterCategory,
@@ -103,5 +140,9 @@ export function useExpenseFilters(expenses: Expense[]) {
     filteredExpenses,
     hasActiveFilters,
     clearFilters,
+    paginatedExpenses,
+    currentPage,
+    setCurrentPage,
+    totalPages,
   };
 }

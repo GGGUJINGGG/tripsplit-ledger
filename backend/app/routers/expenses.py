@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth_dependencies import get_current_user
@@ -17,7 +17,7 @@ from app.orm_models import (
     User,
 )
 from app.routers.trips import find_trip_or_404
-from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate
+from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate, ExpensePage
 from app.services.calculations import is_expense_visible, split_cents_evenly
 
 
@@ -138,32 +138,58 @@ def replace_expense_shares(
     ]
 
 
-@router.get("", response_model=list[ExpenseRead])
+@router.get("", response_model=ExpensePage)
 def list_expenses(
     trip_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[Expense]:
+) -> ExpensePage:
     find_trip_or_404(db, trip_id, current_user)
 
-    statement = (
+    # Same rule as is_expense_visible(), expressed as SQL so pagination
+    # and the total count are computed after visibility is applied
+    # (not before) — a page can't come up short because it silently
+    # includes personal expenses that belong to someone else.
+    visible_to_current_user = or_(
+        Expense.expense_type == DBExpenseType.SHARED,
+        and_(
+            Expense.expense_type == DBExpenseType.PERSONAL,
+            TripMember.user_id == current_user.id,
+        ),
+    )
+
+    base_statement = (
         select(Expense)
-        .options(
+        .join(Expense.paid_by)
+        .where(Expense.trip_id == trip_id, visible_to_current_user)
+    )
+
+    total = db.scalar(
+        select(func.count()).select_from(base_statement.subquery())
+    )
+
+    page_statement = (
+        base_statement.options(
             selectinload(Expense.shares),
             selectinload(Expense.paid_by),
         )
-        .where(Expense.trip_id == trip_id)
         .order_by(
             Expense.expense_date.desc(),
             Expense.created_at.desc(),
         )
+        .limit(limit)
+        .offset(offset)
     )
-    expenses = db.scalars(statement).all()
-    return [
-        expense
-        for expense in expenses
-        if is_expense_visible(expense, current_user.id)
-    ]
+    expenses = db.scalars(page_statement).all()
+
+    return ExpensePage(
+        items=[ExpenseRead.model_validate(expense) for expense in expenses],
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
