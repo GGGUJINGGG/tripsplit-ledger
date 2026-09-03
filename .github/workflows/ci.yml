@@ -45,6 +45,24 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r requirements.txt
 
+      - name: Audit backend dependencies for known vulnerabilities
+        run: |
+          pip install pip-audit
+          # PYSEC-2026-161/248/249/1941/1942/2280/2281 are known
+          # starlette advisories that only have fixes in starlette 1.x,
+          # which fastapi==0.115.6 (pinned in requirements.txt) doesn't
+          # support yet. Ignored here so this check still catches new
+          # vulnerabilities in any other dependency; tracked in the
+          # roadmap as a follow-up fastapi/starlette upgrade.
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln PYSEC-2026-248 \
+            --ignore-vuln PYSEC-2026-249 \
+            --ignore-vuln PYSEC-2026-1941 \
+            --ignore-vuln PYSEC-2026-1942 \
+            --ignore-vuln PYSEC-2026-2280 \
+            --ignore-vuln PYSEC-2026-2281
+
       - name: Create test database
         run: PGPASSWORD=tripsplit psql -h localhost -U tripsplit -d tripsplit -c "CREATE DATABASE tripsplit_test;"
 
@@ -77,6 +95,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Audit frontend dependencies for known vulnerabilities
+        run: npm audit --omit=dev
 
       - name: Lint
         run: npm run lint
