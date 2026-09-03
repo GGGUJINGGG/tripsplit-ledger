@@ -6,8 +6,9 @@ import type {
 } from "../types";
 import { apiRequest } from "./client";
 import {
-  clearAccessToken,
-  setAccessToken,
+  clearTokens,
+  getRefreshToken,
+  setTokens,
 } from "./token";
 
 
@@ -28,7 +29,7 @@ export async function loginUser(
     body: JSON.stringify(payload),
   });
 
-  setAccessToken(token.access_token);
+  setTokens(token.access_token, token.refresh_token);
   return token;
 }
 
@@ -37,5 +38,18 @@ export function getCurrentUser(): Promise<User> {
 }
 
 export function logoutUser(): void {
-  clearAccessToken();
+  const refreshToken = getRefreshToken();
+
+  if (refreshToken) {
+    // Best-effort: revoke the refresh token server-side so it can't be
+    // replayed later. The user is logged out locally either way.
+    apiRequest("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    }).catch(() => {
+      // Ignore — the token will simply expire on its own.
+    });
+  }
+
+  clearTokens();
 }

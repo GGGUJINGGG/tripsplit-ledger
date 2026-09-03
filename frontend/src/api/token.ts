@@ -1,4 +1,5 @@
 const ACCESS_TOKEN_KEY = "tripsplit_access_token";
+const REFRESH_TOKEN_KEY = "tripsplit_refresh_token";
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -10,4 +11,26 @@ export function setAccessToken(token: string): void {
 
 export function clearAccessToken(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(token: string): void {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+}
+
+export function clearRefreshToken(): void {
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function setTokens(accessToken: string, refreshToken: string): void {
+  setAccessToken(accessToken);
+  setRefreshToken(refreshToken);
+}
+
+export function clearTokens(): void {
+  clearAccessToken();
+  clearRefreshToken();
 }
