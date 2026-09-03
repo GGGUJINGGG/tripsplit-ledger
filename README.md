@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml)
 
+**Live demo:** [tripsplit-ledger.vercel.app](https://tripsplit-ledger.vercel.app) — register your own account to try it (see [Deployment](#deployment) for how the frontend/backend are hosted).
+
 After a group trip, I used Splitwise to settle expenses with friends and ran into a few frustrations: the free tier limits how many expenses you can log per day, and it doesn't show a full spending breakdown for the trip — only who owes whom. I wanted to see total spending by category, by day, and per person, not just the final settlement numbers.
 
 That gap was the starting point. As I logged our actual trip expenses into an early version of this app, I kept noticing other things I wanted — filtering, expense types, CSV export, a per-person spending summary — and added them one by one. TripSplit Ledger is the result: a personal expense tracker built around how I actually think about group travel spending.
@@ -47,13 +49,11 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 
 ## Known Limitations
 
-- **Local development only** — accounts, login, and trip-level authorization are implemented, but the app is not deployed anywhere yet. Running it requires a local PostgreSQL instance and backend/frontend processes.
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
-- **Local development setup** — PostgreSQL currently runs through Docker Compose. Production database configuration and hosted deployment are not yet included.
+- **No frontend UI for trip renaming/deletion or inviting members beyond the invite form** — the API enforces owner-only rules for these, but only invite-by-email has a frontend entry point today.
 
 ## Planned
 
-- Production deployment for the API, database, and frontend
 - Exchange-rate conversion to enable settlements across mixed-currency trips
 - Budget tracking per trip or per category
 
@@ -202,7 +202,12 @@ By default, the frontend calls the backend at `http://localhost:8000/api`.
 
 ## Deployment
 
-The backend deploys as a container (`backend/Dockerfile`) to [Railway](https://railway.app), and the frontend deploys as a static build to [Vercel](https://vercel.com). Both offer free tiers with GitHub-based auto-deploy — pushing to `main` redeploys automatically once connected.
+The backend runs as a container (`backend/Dockerfile`) on [Railway](https://railway.app), and the frontend is a static build on [Vercel](https://vercel.com). Both are connected to this repo's `main` branch — pushing redeploys them automatically.
+
+- **Frontend:** https://tripsplit-ledger.vercel.app
+- **Backend health check:** the Railway service's `/api/health` endpoint
+
+The steps below are what was actually used to stand this up, kept here so the deployment is reproducible.
 
 ### Backend on Railway
 
