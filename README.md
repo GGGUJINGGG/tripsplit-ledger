@@ -53,6 +53,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 - **No frontend UI for trip renaming/deletion or inviting members beyond the invite form** — the API enforces owner-only rules for these, but only invite-by-email has a frontend entry point today.
 - **Password reset emails aren't actually emailed** — no transactional email provider (SES, Resend, SendGrid, ...) is configured, so `POST /auth/forgot-password` logs the reset link server-side instead of sending it. The rest of the flow (single-use, hashed, time-limited tokens; forced logout of other sessions on reset) is real and tested; only the delivery mechanism is a stand-in.
 - **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
+- **Error monitoring (Sentry) is wired up but not turned on** — the backend logs structured JSON for every request (method, path, status, duration) by default, but exception tracking via Sentry only activates if `SENTRY_DSN` is set (see `backend/.env.example`); no Sentry project is configured for this deployment.
 
 ## Planned
 

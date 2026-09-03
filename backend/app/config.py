@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     register_rate_limit_window_seconds: int = 3600
     forgot_password_rate_limit_attempts: int = 5
     forgot_password_rate_limit_window_seconds: int = 3600
+    # Error monitoring is opt-in: unset by default, so the app runs
+    # identically until a real Sentry project's DSN is provided.
+    sentry_dsn: Optional[str] = None
+    sentry_environment: str = "development"
+    sentry_traces_sample_rate: float = 0.0
     # Comma-separated list of origins allowed to call this API.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
