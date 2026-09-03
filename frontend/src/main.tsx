@@ -6,7 +6,9 @@ import {
 } from "react-router-dom";
 
 import App from "./App";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SettlementPage from "./pages/SettlementPage";
 import TripDetailPage from "./pages/TripDetailPage";
 import TripsPage from "./pages/TripsPage";
@@ -23,6 +25,14 @@ const router = createBrowserRouter([
   {
     path: "/register",
     element: <RegisterPage />,
+  },
+  {
+    path: "/forgot-password",
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />,
   },
   {
     element: <ProtectedRoute />,

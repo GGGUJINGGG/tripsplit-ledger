@@ -82,6 +82,10 @@ export default function LoginPage() {
             />
           </label>
 
+          <p className="auth-switch">
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
+
           <button
             className="primary-button"
             type="submit"

@@ -44,15 +44,33 @@ def create_access_token(user_id: UUID | str) -> str:
     )
 
 
+def _hash_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
 def generate_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
 def hash_refresh_token(raw_token: str) -> str:
-    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    return _hash_token(raw_token)
 
 
 def refresh_token_expires_at() -> datetime:
     return datetime.now(timezone.utc) + timedelta(
         days=settings.refresh_token_expire_days,
+    )
+
+
+def generate_password_reset_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_password_reset_token(raw_token: str) -> str:
+    return _hash_token(raw_token)
+
+
+def password_reset_token_expires_at() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(
+        minutes=settings.password_reset_token_expire_minutes,
     )

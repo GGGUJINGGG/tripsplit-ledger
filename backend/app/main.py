@@ -1,9 +1,23 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import auth, dashboard, expenses, participants, settlements, trips
 
+
+# Nothing else configures logging, so without this the root logger's
+# default WARNING level would silently swallow INFO-level app logs like
+# the password-reset link in app.email. Scoped to the "app" logger
+# namespace (not logging.basicConfig on root) so it doesn't also crank
+# up third-party libraries like httpx/sqlalchemy to INFO.
+_app_logger = logging.getLogger("app")
+_app_logger.setLevel(logging.INFO)
+if not _app_logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    _app_logger.addHandler(_handler)
 
 app = FastAPI(title="TripSplit Ledger API")
 

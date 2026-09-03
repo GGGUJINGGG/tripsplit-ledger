@@ -7,10 +7,13 @@ from sqlalchemy.orm import Session
 from app.auth_dependencies import get_current_user
 from app.config import settings
 from app.database import get_db
-from app.orm_models import RefreshToken, User
+from app.email import send_password_reset_email
+from app.orm_models import PasswordResetToken, RefreshToken, User
 from app.rate_limit import enforce_rate_limit
 from app.schemas import (
+    ForgotPasswordRequest,
     RefreshTokenRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserCreate,
     UserLogin,
@@ -19,9 +22,12 @@ from app.schemas import (
 from app.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
+    generate_password_reset_token,
     generate_refresh_token,
     hash_password,
+    hash_password_reset_token,
     hash_refresh_token,
+    password_reset_token_expires_at,
     refresh_token_expires_at,
     verify_password,
 )
@@ -187,6 +193,101 @@ def logout_user(
         stored_token.revoked_at = datetime.now(timezone.utc)
         db.add(stored_token)
         db.commit()
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+) -> None:
+    enforce_rate_limit(
+        request,
+        scope="forgot-password",
+        max_attempts=settings.forgot_password_rate_limit_attempts,
+        window_seconds=settings.forgot_password_rate_limit_window_seconds,
+    )
+
+    normalized_email = str(payload.email).strip().lower()
+    user = db.scalar(
+        select(User).where(User.email == normalized_email)
+    )
+
+    # Always respond 202 whether or not the email is registered, so the
+    # response can't be used to enumerate which addresses have accounts.
+    if user is None:
+        return None
+
+    raw_token = generate_password_reset_token()
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_password_reset_token(raw_token),
+            expires_at=password_reset_token_expires_at(),
+        )
+    )
+    db.commit()
+
+    reset_url = (
+        f"{settings.frontend_base_url.rstrip('/')}"
+        f"/reset-password?token={raw_token}"
+    )
+    send_password_reset_email(user.email, reset_url)
+    return None
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+) -> None:
+    token_hash = hash_password_reset_token(payload.token)
+    stored_token = db.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == token_hash
+        )
+    )
+
+    invalid_token_exception = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired reset token",
+    )
+
+    if stored_token is None or stored_token.used_at is not None:
+        raise invalid_token_exception
+
+    if stored_token.expires_at < datetime.now(timezone.utc):
+        raise invalid_token_exception
+
+    user = db.get(User, stored_token.user_id)
+    if user is None:
+        raise invalid_token_exception
+
+    now = datetime.now(timezone.utc)
+
+    user.password_hash = hash_password(payload.new_password)
+    stored_token.used_at = now
+    db.add(user)
+    db.add(stored_token)
+
+    # A password reset should end every other active session too.
+    active_refresh_tokens = db.scalars(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    for refresh_token in active_refresh_tokens:
+        refresh_token.revoked_at = now
+        db.add(refresh_token)
+
+    db.commit()
 
 
 @router.get(
