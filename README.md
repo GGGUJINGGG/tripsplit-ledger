@@ -200,6 +200,49 @@ http://localhost:5173
 
 By default, the frontend calls the backend at `http://localhost:8000/api`.
 
+## Deployment
+
+The backend deploys as a container (`backend/Dockerfile`) to [Railway](https://railway.app), and the frontend deploys as a static build to [Vercel](https://vercel.com). Both offer free tiers with GitHub-based auto-deploy — pushing to `main` redeploys automatically once connected.
+
+### Backend on Railway
+
+1. Sign up / log in at railway.app with your GitHub account.
+2. **New Project → Deploy from GitHub repo** → select this repo.
+3. On the service Railway creates, open **Settings → Root Directory** and set it to `backend` (this is a monorepo — Railway needs to know which subfolder has the Dockerfile).
+4. In the same project, click **New → Database → Add PostgreSQL**.
+5. On the backend service's **Variables** tab, add:
+   - `DATABASE_URL` → reference the Postgres plugin's connection string (Railway lets you pick `${{Postgres.DATABASE_URL}}` from a dropdown — no need to type it by hand; a bare `postgresql://` URL is fine, the app upgrades it to the `psycopg` driver itself)
+   - `JWT_SECRET_KEY` → a random secret, e.g. generate one locally with `python3 -c "import secrets; print(secrets.token_hex(32))"`
+   - `CORS_ORIGINS` → your Vercel URL once you have it (see below); use `http://localhost:5173` as a placeholder until then
+6. Railway builds the Dockerfile and deploys. Under **Settings → Networking**, click **Generate Domain** to get a public URL like `https://your-app.up.railway.app`.
+7. Verify it: `curl https://your-app.up.railway.app/api/health` should return `{"status":"ok"}`. The Dockerfile runs `alembic upgrade head` on every start, so the schema is created automatically on first boot.
+
+### Frontend on Vercel
+
+1. Sign up / log in at vercel.com with your GitHub account.
+2. **Add New → Project** → import this repo.
+3. Set **Root Directory** to `frontend` (Vite framework preset is auto-detected).
+4. Add an environment variable **before** the first deploy: `VITE_API_BASE_URL` = `https://your-app.up.railway.app/api` (Vite bakes this into the static build at build time — changing it later requires a redeploy, not just a restart).
+5. Deploy. Vercel gives you a URL like `https://your-app.vercel.app`. `vercel.json` in this repo rewrites all paths to `index.html` so refreshing a client-side route (e.g. `/trips/abc123`) doesn't 404.
+
+### Wire them together
+
+Go back to the Railway backend's `CORS_ORIGINS` variable and set it to your actual Vercel URL (e.g. `https://your-app.vercel.app`), then redeploy the backend service so the browser is allowed to call it.
+
+### Smoke test
+
+Once both are live, walk through this once end-to-end:
+
+- [ ] Register an account
+- [ ] Create a trip
+- [ ] Add a participant
+- [ ] Add, edit, and delete an expense
+- [ ] View the dashboard and category breakdown
+- [ ] View the settlement summary
+- [ ] Log out, log back in
+- [ ] Confirm the trip and its data are still there
+- [ ] Register a second account and confirm it can't see the first account's trips
+
 ## API Overview
 
 Trips:
