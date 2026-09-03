@@ -8,6 +8,7 @@ from app.auth_dependencies import get_current_user
 from app.database import get_db
 from app.orm_models import Expense, Trip, TripMember, User
 from app.schemas import SettlementSummary
+from app.services.calculations import filter_visible_expenses
 from app.services.settlements import MixedCurrencyError, simplify_settlements
 
 
@@ -30,6 +31,9 @@ def get_settlements(
             selectinload(Trip.expenses).selectinload(
                 Expense.shares
             ),
+            selectinload(Trip.expenses).selectinload(
+                Expense.paid_by
+            ),
         )
         .where(
             Trip.id == trip_id,
@@ -45,7 +49,9 @@ def get_settlements(
         )
 
     try:
-        return simplify_settlements(trip)
+        return simplify_settlements(
+            filter_visible_expenses(trip, current_user.id)
+        )
     except MixedCurrencyError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

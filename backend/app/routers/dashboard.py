@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.orm_models import Expense, Trip, TripMember, User
 from app.schemas import DashboardSummary
-from app.services.calculations import build_dashboard_summary
+from app.services.calculations import build_dashboard_summary, filter_visible_expenses
 from app.auth_dependencies import get_current_user
 
 
@@ -30,6 +30,9 @@ def get_dashboard(
             selectinload(Trip.expenses).selectinload(
                 Expense.shares
             ),
+            selectinload(Trip.expenses).selectinload(
+                Expense.paid_by
+            ),
         )
         .where(
             Trip.id == trip_id,
@@ -44,4 +47,6 @@ def get_dashboard(
             detail="Trip not found",
         )
 
-    return build_dashboard_summary(trip)
+    return build_dashboard_summary(
+        filter_visible_expenses(trip, current_user.id)
+    )

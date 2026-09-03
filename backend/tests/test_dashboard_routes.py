@@ -79,6 +79,109 @@ class DashboardRouteTests(AuthenticatedDatabaseTestCase):
             10,
         )
 
+    def test_dashboard_excludes_other_members_personal_spending(self) -> None:
+        trip = self.client.post(
+            "/api/trips",
+            json={"name": "Dashboard Test", "start_date": "2026-07-01"},
+        ).json()
+        owner = trip["participants"][0]
+
+        register_response = self.client.post(
+            "/api/auth/register",
+            json={
+                "email": "member@example.com",
+                "password": "secure-password-456",
+                "display_name": "Member Person",
+            },
+        )
+        self.assertEqual(register_response.status_code, 201)
+        login_response = self.client.post(
+            "/api/auth/login",
+            json={
+                "email": "member@example.com",
+                "password": "secure-password-456",
+            },
+        )
+        member_headers = {
+            "Authorization": f"Bearer {login_response.json()['access_token']}"
+        }
+
+        invite_response = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "member@example.com"},
+        )
+        self.assertEqual(invite_response.status_code, 201)
+        member = invite_response.json()
+
+        # A shared expense both should see.
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Dinner",
+                "amount": 20,
+                "paid_by": owner["id"],
+                "split_among": [owner["id"], member["id"]],
+                "expense_type": "shared",
+                "category": "food",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+        )
+        # The owner's own personal expense.
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Coffee",
+                "amount": 5,
+                "paid_by": owner["id"],
+                "split_among": [owner["id"]],
+                "expense_type": "personal",
+                "category": "food",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+        )
+        # The member's own personal expense, recorded under their own login.
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Souvenir",
+                "amount": 15,
+                "paid_by": member["id"],
+                "split_among": [member["id"]],
+                "expense_type": "personal",
+                "category": "shopping",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+            headers=member_headers,
+        )
+
+        owner_dashboard = self.client.get(
+            f"/api/trips/{trip['id']}/dashboard"
+        ).json()
+        member_dashboard = self.client.get(
+            f"/api/trips/{trip['id']}/dashboard",
+            headers=member_headers,
+        ).json()
+
+        # Both totals include the $20 shared expense plus only the
+        # viewer's own $5 or $15 personal expense — never the other
+        # member's hidden personal spending.
+        self.assertEqual(owner_dashboard["total_trip_spending"], 25)
+        self.assertEqual(member_dashboard["total_trip_spending"], 35)
+
+        owner_paid = {
+            item["participant_id"]: item["amount"]
+            for item in owner_dashboard["paid_by_person"]
+        }
+        member_paid = {
+            item["participant_id"]: item["amount"]
+            for item in member_dashboard["paid_by_person"]
+        }
+        self.assertEqual(owner_paid[member["id"]], 0)
+        self.assertEqual(member_paid[owner["id"]], 20)
+
     def test_cannot_access_another_users_dashboard(self) -> None:
         register_response = self.client.post(
             "/api/auth/register",

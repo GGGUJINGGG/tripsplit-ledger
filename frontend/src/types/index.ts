@@ -12,6 +12,7 @@ export type ExpenseType = "shared" | "personal";
 export interface Participant {
   id: string;
   name: string;
+  user_id?: string | null;
 }
 
 export interface Expense {

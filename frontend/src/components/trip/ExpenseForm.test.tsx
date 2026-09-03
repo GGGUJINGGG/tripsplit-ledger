@@ -1,29 +1,51 @@
+import type { ComponentProps } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AuthProvider } from "../../auth/AuthContext";
+import { clearAccessToken, setAccessToken } from "../../api/token";
 import type { Participant } from "../../types";
 import ExpenseForm from "./ExpenseForm";
 
+vi.mock("../../api/auth", () => ({
+  getCurrentUser: vi.fn(),
+  logoutUser: vi.fn(),
+}));
+
+import { getCurrentUser } from "../../api/auth";
+
 const participants: Participant[] = [
-  { id: "p1", name: "Alex" },
-  { id: "p2", name: "Maya" },
+  { id: "p1", name: "Alex", user_id: "user-alex" },
+  { id: "p2", name: "Maya", user_id: "user-maya" },
 ];
 
-describe("ExpenseForm validation", () => {
-  it("shows an error and does not submit when the title is blank", async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-
-    render(
+function renderForm(props: Partial<ComponentProps<typeof ExpenseForm>>) {
+  return render(
+    <AuthProvider>
       <ExpenseForm
         participants={participants}
         editingExpense={null}
         isSaving={false}
         onCancelEdit={vi.fn()}
-        onSubmit={onSubmit}
-      />,
-    );
+        onSubmit={vi.fn()}
+        {...props}
+      />
+    </AuthProvider>,
+  );
+}
+
+describe("ExpenseForm validation", () => {
+  afterEach(() => {
+    clearAccessToken();
+    vi.clearAllMocks();
+  });
+
+  it("shows an error and does not submit when the title is blank", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    renderForm({ onSubmit });
 
     await user.type(screen.getByLabelText("Amount"), "10");
     await user.click(screen.getByRole("button", { name: /add expense/i }));
@@ -36,15 +58,7 @@ describe("ExpenseForm validation", () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
 
-    render(
-      <ExpenseForm
-        participants={participants}
-        editingExpense={null}
-        isSaving={false}
-        onCancelEdit={vi.fn()}
-        onSubmit={onSubmit}
-      />,
-    );
+    renderForm({ onSubmit });
 
     await user.type(screen.getByLabelText("Title"), "Dinner");
     await user.type(screen.getByLabelText("Amount"), "0");
@@ -60,15 +74,7 @@ describe("ExpenseForm validation", () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
 
-    render(
-      <ExpenseForm
-        participants={participants}
-        editingExpense={null}
-        isSaving={false}
-        onCancelEdit={vi.fn()}
-        onSubmit={onSubmit}
-      />,
-    );
+    renderForm({ onSubmit });
 
     await user.type(screen.getByLabelText("Title"), "Dinner");
     await user.type(screen.getByLabelText("Amount"), "20");
@@ -87,15 +93,7 @@ describe("ExpenseForm validation", () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(true);
 
-    render(
-      <ExpenseForm
-        participants={participants}
-        editingExpense={null}
-        isSaving={false}
-        onCancelEdit={vi.fn()}
-        onSubmit={onSubmit}
-      />,
-    );
+    renderForm({ onSubmit });
 
     await user.type(screen.getByLabelText("Title"), "Dinner");
     await user.type(screen.getByLabelText("Amount"), "42.5");
@@ -114,32 +112,90 @@ describe("ExpenseForm validation", () => {
   });
 
   it("pre-fills the form from editingExpense and shows Save changes", () => {
-    render(
-      <ExpenseForm
-        participants={participants}
-        editingExpense={{
-          id: "e1",
-          trip_id: "trip-1",
-          title: "Hotel",
-          amount: 120,
-          paid_by: "p1",
-          split_among: ["p1"],
-          expense_type: "personal",
-          category: "hotel",
-          date: "2026-07-01",
-          currency: "USD",
-          note: null,
-          created_at: "2026-07-01T00:00:00Z",
-          updated_at: "2026-07-01T00:00:00Z",
-        }}
-        isSaving={false}
-        onCancelEdit={vi.fn()}
-        onSubmit={vi.fn()}
-      />,
-    );
+    renderForm({
+      editingExpense: {
+        id: "e1",
+        trip_id: "trip-1",
+        title: "Hotel",
+        amount: 120,
+        paid_by: "p1",
+        split_among: ["p1"],
+        expense_type: "personal",
+        category: "hotel",
+        date: "2026-07-01",
+        currency: "USD",
+        note: null,
+        created_at: "2026-07-01T00:00:00Z",
+        updated_at: "2026-07-01T00:00:00Z",
+      },
+    });
 
     expect(screen.getByLabelText("Title")).toHaveValue("Hotel");
     expect(screen.getByLabelText("Amount")).toHaveValue(120);
     expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+  });
+});
+
+describe("ExpenseForm personal expense payer lock", () => {
+  afterEach(() => {
+    clearAccessToken();
+    vi.clearAllMocks();
+  });
+
+  it("locks Paid by to yourself when Type is switched to Personal", async () => {
+    const user = userEvent.setup();
+    setAccessToken("valid-token");
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      id: "user-maya",
+      email: "maya@example.com",
+      display_name: "Maya",
+      created_at: "2026-07-01T00:00:00Z",
+      updated_at: "2026-07-01T00:00:00Z",
+    });
+
+    renderForm({});
+
+    // Wait for AuthProvider to resolve the logged-in user (Maya).
+    await waitFor(() =>
+      expect(screen.getByLabelText("Amount")).toBeInTheDocument(),
+    );
+
+    await user.selectOptions(screen.getByLabelText("Type"), "personal");
+
+    const paidBySelect = screen.getByLabelText("Paid by") as HTMLSelectElement;
+    expect(paidBySelect).toBeDisabled();
+    expect(paidBySelect).toHaveValue("p2"); // Maya's participant id
+    expect(screen.getByText("Maya", { selector: "option" })).toBeInTheDocument();
+    expect(screen.queryByText("Alex", { selector: "option" })).not.toBeInTheDocument();
+  });
+
+  it("submits the personal expense with yourself as the payer", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    setAccessToken("valid-token");
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      id: "user-alex",
+      email: "alex@example.com",
+      display_name: "Alex",
+      created_at: "2026-07-01T00:00:00Z",
+      updated_at: "2026-07-01T00:00:00Z",
+    });
+
+    renderForm({ onSubmit });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Amount")).toBeInTheDocument(),
+    );
+
+    await user.selectOptions(screen.getByLabelText("Type"), "personal");
+    await user.type(screen.getByLabelText("Title"), "Coffee");
+    await user.type(screen.getByLabelText("Amount"), "5");
+    await user.click(screen.getByRole("button", { name: /add expense/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      paid_by: "p1",
+      split_among: ["p1"],
+      expense_type: "personal",
+    });
   });
 });

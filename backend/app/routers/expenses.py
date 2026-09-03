@@ -18,7 +18,7 @@ from app.orm_models import (
 )
 from app.routers.trips import find_trip_or_404
 from app.schemas import ExpenseCreate, ExpenseRead, ExpenseUpdate
-from app.services.calculations import split_cents_evenly
+from app.services.calculations import is_expense_visible, split_cents_evenly
 
 
 router = APIRouter(
@@ -35,10 +35,14 @@ def find_expense_or_404(
     db: Session,
     trip_id: UUID,
     expense_id: UUID,
+    current_user_id: UUID,
 ) -> Expense:
     statement = (
         select(Expense)
-        .options(selectinload(Expense.shares))
+        .options(
+            selectinload(Expense.shares),
+            selectinload(Expense.paid_by),
+        )
         .where(
             Expense.id == expense_id,
             Expense.trip_id == trip_id,
@@ -46,12 +50,29 @@ def find_expense_or_404(
     )
     expense = db.scalar(statement)
 
-    if expense is None:
+    if expense is None or not is_expense_visible(expense, current_user_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Expense not found",
         )
     return expense
+
+
+def validate_personal_expense_owner(
+    db: Session,
+    expense_type: DBExpenseType,
+    paid_by_id: UUID,
+    current_user: User,
+) -> None:
+    if expense_type != DBExpenseType.PERSONAL:
+        return
+
+    payer = db.get(TripMember, paid_by_id)
+    if payer is None or payer.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Personal expenses can only be recorded for yourself",
+        )
 
 
 def get_participant_ids(
@@ -127,14 +148,22 @@ def list_expenses(
 
     statement = (
         select(Expense)
-        .options(selectinload(Expense.shares))
+        .options(
+            selectinload(Expense.shares),
+            selectinload(Expense.paid_by),
+        )
         .where(Expense.trip_id == trip_id)
         .order_by(
             Expense.expense_date.desc(),
             Expense.created_at.desc(),
         )
     )
-    return list(db.scalars(statement).all())
+    expenses = db.scalars(statement).all()
+    return [
+        expense
+        for expense in expenses
+        if is_expense_visible(expense, current_user.id)
+    ]
 
 
 @router.post(
@@ -161,6 +190,12 @@ def create_expense(
         participant_ids,
         payload.paid_by,
         split_among,
+    )
+    validate_personal_expense_owner(
+        db,
+        expense_type,
+        payload.paid_by,
+        current_user,
     )
 
     expense = Expense(
@@ -206,6 +241,7 @@ def get_expense(
         db,
         trip_id,
         expense_id,
+        current_user.id,
     )
 
 
@@ -222,6 +258,7 @@ def update_expense(
         db,
         trip_id,
         expense_id,
+        current_user.id,
     )
     updates = payload.model_dump(exclude_unset=True)
 
@@ -248,6 +285,12 @@ def update_expense(
         get_participant_ids(db, trip_id),
         paid_by,
         split_among,
+    )
+    validate_personal_expense_owner(
+        db,
+        expense_type,
+        paid_by,
+        current_user,
     )
 
     expense.paid_by_id = paid_by
@@ -306,6 +349,7 @@ def delete_expense(
         db,
         trip_id,
         expense_id,
+        current_user.id,
     )
 
     trip.updated_at = datetime.now(UTC)

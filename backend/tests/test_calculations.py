@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from app.orm_models import ExpenseCategory, ExpenseType
 from app.services.calculations import (
     build_dashboard_summary,
+    filter_visible_expenses,
+    is_expense_visible,
     split_cents_evenly,
 )
 from app.services.settlements import MixedCurrencyError, simplify_settlements
@@ -150,6 +152,68 @@ class SplitCentsEvenlyTests(unittest.TestCase):
         )
 
         self.assertEqual(forward, reversed_order)
+
+
+class ExpenseVisibilityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.alex_member = SimpleNamespace(id="alex", user_id="alex-user")
+        self.maya_member = SimpleNamespace(id="maya", user_id="maya-user")
+        self.guest_member = SimpleNamespace(id="guest", user_id=None)
+
+        self.shared_expense = SimpleNamespace(
+            expense_type=ExpenseType.SHARED,
+            paid_by=self.alex_member,
+        )
+        self.alex_personal_expense = SimpleNamespace(
+            expense_type=ExpenseType.PERSONAL,
+            paid_by=self.alex_member,
+        )
+        self.guest_personal_expense = SimpleNamespace(
+            expense_type=ExpenseType.PERSONAL,
+            paid_by=self.guest_member,
+        )
+
+    def test_shared_expenses_are_always_visible(self) -> None:
+        self.assertTrue(is_expense_visible(self.shared_expense, "alex-user"))
+        self.assertTrue(is_expense_visible(self.shared_expense, "maya-user"))
+
+    def test_personal_expense_visible_only_to_its_payer(self) -> None:
+        self.assertTrue(
+            is_expense_visible(self.alex_personal_expense, "alex-user")
+        )
+        self.assertFalse(
+            is_expense_visible(self.alex_personal_expense, "maya-user")
+        )
+
+    def test_guest_owned_personal_expense_is_visible_to_no_one(self) -> None:
+        # A guest participant has no user_id, so nobody's current_user_id
+        # can ever match it.
+        self.assertFalse(
+            is_expense_visible(self.guest_personal_expense, "alex-user")
+        )
+        self.assertFalse(
+            is_expense_visible(self.guest_personal_expense, None)
+        )
+
+    def test_filter_visible_expenses_keeps_shared_and_own_personal_only(
+        self,
+    ) -> None:
+        trip = SimpleNamespace(
+            members=[self.alex_member, self.maya_member],
+            expenses=[
+                self.shared_expense,
+                self.alex_personal_expense,
+                self.guest_personal_expense,
+            ],
+        )
+
+        view = filter_visible_expenses(trip, "alex-user")
+
+        self.assertEqual(
+            view.expenses,
+            [self.shared_expense, self.alex_personal_expense],
+        )
+        self.assertEqual(view.members, trip.members)
 
 
 if __name__ == "__main__":

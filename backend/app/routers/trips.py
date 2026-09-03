@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.orm_models import MemberRole, Trip, TripMember, User
-from app.schemas import TripCreate, TripRead, TripUpdate
+from app.schemas import ExpenseRead, TripCreate, TripRead, TripUpdate
 from app.auth_dependencies import get_current_user
+from app.services.calculations import is_expense_visible
 
 
 router = APIRouter(
@@ -145,8 +146,15 @@ def get_trip(
     trip_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Trip:
-    return find_trip_or_404(db, trip_id, current_user)
+) -> TripRead:
+    trip = find_trip_or_404(db, trip_id, current_user)
+    trip_read = TripRead.model_validate(trip)
+    trip_read.expenses = [
+        ExpenseRead.model_validate(expense)
+        for expense in trip.expenses
+        if is_expense_visible(expense, current_user.id)
+    ]
+    return trip_read
 
 
 @router.put("/{trip_id}", response_model=TripRead)

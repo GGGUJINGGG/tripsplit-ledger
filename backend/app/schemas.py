@@ -80,6 +80,7 @@ class ParticipantRead(BaseModel):
 
     id: UUID
     name: str = Field(validation_alias="display_name")
+    user_id: Optional[UUID] = None
 
 
 class TripRead(BaseModel):

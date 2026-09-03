@@ -41,6 +41,42 @@ def is_shared_expense(expense: Any) -> bool:
     return str(expense.expense_type) == ExpenseType.SHARED.value
 
 
+def is_expense_visible(expense: Any, current_user_id: Any) -> bool:
+    """Shared expenses are visible to the whole trip; personal expenses
+    are visible only to the member who paid for them, and only when
+    that member is the currently authenticated user. A guest payer has
+    no user_id, so their personal expenses are visible to no one."""
+    if is_shared_expense(expense):
+        return True
+    if current_user_id is None:
+        return False
+    payer = expense.paid_by
+    payer_user_id = getattr(payer, "user_id", None) if payer is not None else None
+    return payer_user_id is not None and payer_user_id == current_user_id
+
+
+class VisibleExpensesView:
+    """Duck-typed stand-in for a Trip whose .expenses have already been
+    filtered to what the current user is allowed to see. Everything in
+    this module only reads .members/.participants and .expenses off
+    whatever trip-like object it's given."""
+
+    def __init__(self, members: list[Any], expenses: list[Any]) -> None:
+        self.members = members
+        self.expenses = expenses
+
+
+def filter_visible_expenses(trip: Any, current_user_id: Any) -> VisibleExpensesView:
+    return VisibleExpensesView(
+        members=get_participants(trip),
+        expenses=[
+            expense
+            for expense in trip.expenses
+            if is_expense_visible(expense, current_user_id)
+        ],
+    )
+
+
 def split_cents_evenly(
     amount_cents: int,
     participant_ids: list[Any],

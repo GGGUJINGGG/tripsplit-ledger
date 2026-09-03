@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Plus, Save, X } from "lucide-react";
 
+import { useAuth } from "../../auth/AuthContext";
 import type { Expense, ExpenseCategory, ExpenseCreate, ExpenseType, Participant } from "../../types";
 import { type CurrencyCode, currencies, normalizeCurrency } from "../../utils/currency";
 import { categories } from "../../utils/expenses";
@@ -20,6 +21,10 @@ export default function ExpenseForm({
   onCancelEdit,
   onSubmit,
 }: ExpenseFormProps) {
+  const { user } = useAuth();
+  const selfParticipant = user
+    ? (participants.find((participant) => participant.user_id === user.id) ?? null)
+    : null;
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState("");
@@ -168,24 +173,28 @@ export default function ExpenseForm({
         </label>
         <label htmlFor="expense-paid-by">
           Paid by
-          <select
-            id="expense-paid-by"
-            value={paidBy}
-            onChange={(event) => {
-              const nextPaidBy = event.target.value;
-              setPaidBy(nextPaidBy);
-              if (expenseType === "personal" && nextPaidBy) {
-                setSplitAmong([nextPaidBy]);
-              }
-            }}
-          >
-            <option value="">Select payer</option>
-            {participants.map((participant) => (
-              <option key={participant.id} value={participant.id}>
-                {participant.name}
-              </option>
-            ))}
-          </select>
+          {expenseType === "personal" ? (
+            <select id="expense-paid-by" value={paidBy} disabled>
+              {selfParticipant ? (
+                <option value={selfParticipant.id}>{selfParticipant.name}</option>
+              ) : (
+                <option value="">You are not a participant in this trip</option>
+              )}
+            </select>
+          ) : (
+            <select
+              id="expense-paid-by"
+              value={paidBy}
+              onChange={(event) => setPaidBy(event.target.value)}
+            >
+              <option value="">Select payer</option>
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label htmlFor="expense-type">
           Type
@@ -195,8 +204,9 @@ export default function ExpenseForm({
             onChange={(event) => {
               const nextType = event.target.value as ExpenseType;
               setExpenseType(nextType);
-              if (nextType === "personal" && paidBy) {
-                setSplitAmong([paidBy]);
+              if (nextType === "personal" && selfParticipant) {
+                setPaidBy(selfParticipant.id);
+                setSplitAmong([selfParticipant.id]);
               }
             }}
           >
