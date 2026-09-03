@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -39,4 +41,18 @@ def create_access_token(user_id: UUID | str) -> str:
         payload,
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
+    )
+
+
+def generate_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def refresh_token_expires_at() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(
+        days=settings.refresh_token_expire_days,
     )

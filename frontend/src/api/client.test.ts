@@ -1,10 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiRequest } from "./client";
-import { clearAccessToken, setAccessToken } from "./token";
+import {
+  clearAccessToken,
+  clearRefreshToken,
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+} from "./token";
 
-function mockFetchOnce(response: Partial<Response> & { json?: () => Promise<unknown> }) {
+type MockResponse = Partial<Response> & { json?: () => Promise<unknown> };
+
+function mockFetchOnce(response: MockResponse) {
   const fetchMock = vi.fn().mockResolvedValue(response);
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function mockFetchSequence(responses: MockResponse[]) {
+  const fetchMock = vi.fn();
+  responses.forEach((response) => {
+    fetchMock.mockImplementationOnce(() => Promise.resolve(response));
+  });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -12,6 +30,7 @@ function mockFetchOnce(response: Partial<Response> & { json?: () => Promise<unkn
 describe("apiRequest", () => {
   beforeEach(() => {
     clearAccessToken();
+    clearRefreshToken();
   });
 
   afterEach(() => {
@@ -100,5 +119,80 @@ describe("apiRequest", () => {
     await expect(apiRequest("/trips/trip-1/expenses")).rejects.toThrow(
       /amount must be greater than 0/,
     );
+  });
+
+  it("refreshes the access token and retries once after a 401", async () => {
+    setAccessToken("expired-access-token");
+    setRefreshToken("valid-refresh-token");
+
+    const fetchMock = mockFetchSequence([
+      { ok: false, status: 401, json: () => Promise.resolve({ detail: "Unauthorized" }) },
+      {
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            access_token: "new-access-token",
+            refresh_token: "new-refresh-token",
+          }),
+      },
+      { ok: true, status: 200, json: () => Promise.resolve({ id: "trip-1" }) },
+    ]);
+
+    const result = await apiRequest<{ id: string }>("/trips/trip-1");
+
+    expect(result).toEqual({ id: "trip-1" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    const [refreshUrl, refreshInit] = fetchMock.mock.calls[1];
+    expect(refreshUrl).toContain("/auth/refresh");
+    expect(JSON.parse(refreshInit.body as string)).toEqual({
+      refresh_token: "valid-refresh-token",
+    });
+
+    const [, retryInit] = fetchMock.mock.calls[2];
+    const retryHeaders = retryInit.headers as Headers;
+    expect(retryHeaders.get("Authorization")).toBe("Bearer new-access-token");
+
+    expect(getAccessToken()).toBe("new-access-token");
+    expect(getRefreshToken()).toBe("new-refresh-token");
+  });
+
+  it("surfaces the original 401 without calling refresh when no refresh token is stored", async () => {
+    setAccessToken("expired-access-token");
+
+    const fetchMock = mockFetchSequence([
+      { ok: false, status: 401, json: () => Promise.resolve({ detail: "Unauthorized" }) },
+    ]);
+
+    await expect(apiRequest("/trips/trip-1")).rejects.toThrow("Unauthorized");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears tokens and surfaces the original 401 when the refresh call itself fails", async () => {
+    setAccessToken("expired-access-token");
+    setRefreshToken("stale-refresh-token");
+
+    mockFetchSequence([
+      { ok: false, status: 401, json: () => Promise.resolve({ detail: "Unauthorized" }) },
+      { ok: false, status: 401, json: () => Promise.resolve({ detail: "Invalid refresh token" }) },
+    ]);
+
+    await expect(apiRequest("/trips/trip-1")).rejects.toThrow("Unauthorized");
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+  });
+
+  it("does not attempt a refresh when the 401 comes from the login endpoint", async () => {
+    setRefreshToken("valid-refresh-token");
+
+    const fetchMock = mockFetchSequence([
+      { ok: false, status: 401, json: () => Promise.resolve({ detail: "Invalid email or password" }) },
+    ]);
+
+    await expect(
+      apiRequest("/auth/login", { method: "POST", body: "{}" }),
+    ).rejects.toThrow("Invalid email or password");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,6 +27,7 @@ describe("Login flow", () => {
 
     vi.mocked(loginUser).mockResolvedValue({
       access_token: "new-token",
+      refresh_token: "new-refresh-token",
       token_type: "bearer",
     });
     vi.mocked(getCurrentUser).mockResolvedValue({
