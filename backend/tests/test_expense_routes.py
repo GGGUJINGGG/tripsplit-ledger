@@ -445,7 +445,8 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
             headers=owner_headers,
         ).json()
         self.assertIn(
-            personal_expense["id"], [item["id"] for item in own_list]
+            personal_expense["id"],
+            [item["id"] for item in own_list["items"]],
         )
 
         # The invited member cannot see it in the list, the nested trip
@@ -455,7 +456,8 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
             headers=member_headers,
         ).json()
         self.assertNotIn(
-            personal_expense["id"], [item["id"] for item in member_list]
+            personal_expense["id"],
+            [item["id"] for item in member_list["items"]],
         )
 
         member_trip = self.client.get(
@@ -478,3 +480,145 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
             headers=member_headers,
         )
         self.assertEqual(direct_delete.status_code, 404)
+
+    def _create_trip_with_expenses(self, count: int) -> dict:
+        trip = self.client.post(
+            "/api/trips",
+            json={"name": "Pagination Test", "start_date": "2026-07-01"},
+        ).json()
+        owner = trip["participants"][0]
+
+        for index in range(count):
+            response = self.client.post(
+                f"/api/trips/{trip['id']}/expenses",
+                json={
+                    "title": f"Expense {index}",
+                    "amount": 10,
+                    "paid_by": owner["id"],
+                    "split_among": [owner["id"]],
+                    "expense_type": "shared",
+                    "category": "food",
+                    "date": f"2026-07-{index + 1:02d}",
+                    "currency": "USD",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        return trip
+
+    def test_list_expenses_defaults_to_a_50_item_page(self) -> None:
+        trip = self._create_trip_with_expenses(3)
+
+        response = self.client.get(f"/api/trips/{trip['id']}/expenses")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["limit"], 50)
+        self.assertEqual(body["offset"], 0)
+        self.assertEqual(len(body["items"]), 3)
+
+    def test_list_expenses_respects_limit_and_offset(self) -> None:
+        trip = self._create_trip_with_expenses(5)
+
+        first_page = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?limit=2&offset=0"
+        ).json()
+        second_page = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?limit=2&offset=2"
+        ).json()
+        third_page = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?limit=2&offset=4"
+        ).json()
+
+        self.assertEqual(first_page["total"], 5)
+        self.assertEqual(len(first_page["items"]), 2)
+        self.assertEqual(len(second_page["items"]), 2)
+        self.assertEqual(len(third_page["items"]), 1)
+
+        # Newest-first ordering (expense_date desc), so page 1 starts
+        # with "Expense 4" (2026-07-05) and pages don't overlap.
+        all_titles = [
+            item["title"]
+            for page in (first_page, second_page, third_page)
+            for item in page["items"]
+        ]
+        self.assertEqual(
+            all_titles,
+            ["Expense 4", "Expense 3", "Expense 2", "Expense 1", "Expense 0"],
+        )
+        self.assertEqual(len(set(all_titles)), 5)
+
+    def test_list_expenses_rejects_out_of_range_limit(self) -> None:
+        trip = self._create_trip_with_expenses(1)
+
+        too_high = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?limit=201"
+        )
+        too_low = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?limit=0"
+        )
+        negative_offset = self.client.get(
+            f"/api/trips/{trip['id']}/expenses?offset=-1"
+        )
+
+        self.assertEqual(too_high.status_code, 422)
+        self.assertEqual(too_low.status_code, 422)
+        self.assertEqual(negative_offset.status_code, 422)
+
+    def test_list_expenses_total_excludes_other_members_personal_expenses(
+        self,
+    ) -> None:
+        trip = self.client.post(
+            "/api/trips",
+            json={"name": "Pagination Privacy Test", "start_date": "2026-07-01"},
+        ).json()
+        owner = trip["participants"][0]
+
+        member_headers = self.register_and_login(
+            "pagination-member@example.com", "Pagination Member"
+        )
+        invite_response = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "pagination-member@example.com"},
+        )
+        self.assertEqual(invite_response.status_code, 201)
+        member = invite_response.json()
+
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            json={
+                "title": "Shared Dinner",
+                "amount": 20,
+                "paid_by": owner["id"],
+                "split_among": [owner["id"], member["id"]],
+                "expense_type": "shared",
+                "category": "food",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+        )
+        self.client.post(
+            f"/api/trips/{trip['id']}/expenses",
+            headers=member_headers,
+            json={
+                "title": "Member's Private Coffee",
+                "amount": 5,
+                "paid_by": member["id"],
+                "split_among": [member["id"]],
+                "expense_type": "personal",
+                "category": "food",
+                "date": "2026-07-01",
+                "currency": "USD",
+            },
+        )
+
+        owner_page = self.client.get(
+            f"/api/trips/{trip['id']}/expenses"
+        ).json()
+
+        self.assertEqual(owner_page["total"], 1)
+        self.assertEqual(
+            [item["title"] for item in owner_page["items"]],
+            ["Shared Dinner"],
+        )

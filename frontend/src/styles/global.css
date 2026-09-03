@@ -508,6 +508,14 @@ th {
   gap: 10px;
 }
 
+.pagination {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
 .secondary-button.danger {
   color: #9f1f14;
 }

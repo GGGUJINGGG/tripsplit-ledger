@@ -1,6 +1,6 @@
-import { Download, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from "lucide-react";
 
-import type { useExpenseFilters } from "../../hooks/useExpenseFilters";
+import { EXPENSE_PAGE_SIZE, type useExpenseFilters } from "../../hooks/useExpenseFilters";
 import type { Expense, Participant } from "../../types";
 import { formatMoney, normalizeCurrency } from "../../utils/currency";
 import { getExpenseType } from "../../utils/expenses";
@@ -27,7 +27,13 @@ export default function ExpenseTable({
   onDelete,
   onExportCsv,
 }: ExpenseTableProps) {
-  const { filteredExpenses } = filters;
+  const {
+    filteredExpenses,
+    paginatedExpenses,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+  } = filters;
 
   return (
     <section className="panel">
@@ -35,7 +41,11 @@ export default function ExpenseTable({
         <h2>Expense Ledger</h2>
         <div className="panel-actions">
           <span className="muted">
-            Showing {filteredExpenses.length} of {totalExpenseCount}
+            {totalPages > 1
+              ? `Showing ${(currentPage - 1) * EXPENSE_PAGE_SIZE + 1}-${
+                  (currentPage - 1) * EXPENSE_PAGE_SIZE + paginatedExpenses.length
+                } of ${filteredExpenses.length}`
+              : `Showing ${filteredExpenses.length} of ${totalExpenseCount}`}
           </span>
           <button
             className="secondary-button"
@@ -69,7 +79,7 @@ export default function ExpenseTable({
               </tr>
             </thead>
             <tbody>
-              {filteredExpenses.map((expense) => (
+              {paginatedExpenses.map((expense) => (
                 <tr key={expense.id}>
                   <td>
                     <strong>{expense.title}</strong>
@@ -115,6 +125,31 @@ export default function ExpenseTable({
           </table>
         </div>
       )}
+      {totalPages > 1 ? (
+        <div className="pagination">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft size={16} />
+            Previous
+          </button>
+          <span className="muted">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Next
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

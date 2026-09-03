@@ -171,6 +171,13 @@ class ExpenseRead(BaseModel):
     updated_at: datetime
 
 
+class ExpensePage(BaseModel):
+    items: list[ExpenseRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class CategorySpending(BaseModel):
     category: ExpenseCategory
     amount: float
