@@ -16,8 +16,8 @@ vi.mock("../../api/auth", () => ({
 import { getCurrentUser } from "../../api/auth";
 
 const participants: Participant[] = [
-  { id: "p1", name: "Alex", user_id: "user-alex" },
-  { id: "p2", name: "Maya", user_id: "user-maya" },
+  { id: "p1", name: "Alex", user_id: "user-alex", role: "member" },
+  { id: "p2", name: "Maya", user_id: "user-maya", role: "member" },
 ];
 
 function renderForm(props: Partial<ComponentProps<typeof ExpenseForm>>) {

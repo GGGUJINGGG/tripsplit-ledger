@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import CategoryBreakdown from "../components/trip/CategoryBreakdown";
 import DashboardSummary from "../components/trip/DashboardSummary";
@@ -9,6 +9,7 @@ import ParticipantsPanel from "../components/trip/ParticipantsPanel";
 import ParticipantSummary from "../components/trip/ParticipantSummary";
 import SettlementPanel from "../components/trip/SettlementPanel";
 import TripHeader from "../components/trip/TripHeader";
+import { useAuth } from "../auth/AuthContext";
 import { useExpenseFilters } from "../hooks/useExpenseFilters";
 import { useTripDetail } from "../hooks/useTripDetail";
 import type { Expense } from "../types";
@@ -16,6 +17,8 @@ import { downloadExpensesCsv } from "../utils/expenses";
 
 export default function TripDetailPage() {
   const { tripId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     trip,
     settlements,
@@ -34,6 +37,8 @@ export default function TripDetailPage() {
     removeParticipant,
     saveExpense,
     removeExpense,
+    renameTrip,
+    removeTrip,
   } = useTripDetail(tripId);
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
@@ -86,9 +91,29 @@ export default function TripDetailPage() {
     downloadExpensesCsv(trip.name, filters.filteredExpenses, participantNames);
   }
 
+  async function handleDeleteTrip() {
+    if (!trip) return;
+
+    const shouldDelete = window.confirm(
+      `Delete "${trip.name}"? This will permanently remove the trip and all of its expenses. This cannot be undone.`,
+    );
+    if (!shouldDelete) return;
+
+    const succeeded = await removeTrip();
+    if (succeeded) {
+      navigate("/", { replace: true });
+    }
+  }
+
   return (
     <section className="page-stack">
-      <TripHeader trip={trip} />
+      <TripHeader
+        trip={trip}
+        currentUserId={user?.id}
+        isSaving={isSaving}
+        onRename={renameTrip}
+        onDelete={handleDeleteTrip}
+      />
 
       {error ? <div className="alert">{error}</div> : null}
 

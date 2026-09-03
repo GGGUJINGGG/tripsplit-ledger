@@ -46,6 +46,29 @@ class TripRouteTests(AuthenticatedDatabaseTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["start_date"], "2026-07-01")
         self.assertEqual(response.json()["end_date"], "2026-07-10")
+        self.assertEqual(len(response.json()["participants"]), 1)
+        self.assertEqual(response.json()["participants"][0]["role"], "owner")
+
+    def test_member_role_is_visible_on_the_trip_participants_list(self) -> None:
+        create_response = self.client.post(
+            "/api/trips",
+            json={"name": "Team Trip", "start_date": "2026-07-01"},
+        )
+        trip_id = create_response.json()["id"]
+        member_headers = self.add_member(trip_id)
+
+        response = self.client.get(
+            f"/api/trips/{trip_id}",
+            headers=member_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        roles_by_name = {
+            participant["name"]: participant["role"]
+            for participant in response.json()["participants"]
+        }
+        self.assertEqual(roles_by_name["Authenticated User"], "owner")
+        self.assertEqual(roles_by_name["Trip Member"], "member")
 
     def test_rejects_invalid_trip_date_format(self) -> None:
         for invalid_date in ("2026-99-99", "2026-02-31"):

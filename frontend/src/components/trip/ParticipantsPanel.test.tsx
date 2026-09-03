@@ -11,7 +11,7 @@ describe("ParticipantsPanel invite form", () => {
 
     render(
       <ParticipantsPanel
-        participants={[{ id: "p1", name: "Alex" }]}
+        participants={[{ id: "p1", name: "Alex", role: "owner" }]}
         isSaving={false}
         onAdd={vi.fn()}
         onInvite={onInvite}
@@ -35,7 +35,7 @@ describe("ParticipantsPanel invite form", () => {
 
     render(
       <ParticipantsPanel
-        participants={[{ id: "p1", name: "Alex" }]}
+        participants={[{ id: "p1", name: "Alex", role: "owner" }]}
         isSaving={false}
         onAdd={vi.fn()}
         onInvite={onInvite}
