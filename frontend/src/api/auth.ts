@@ -37,6 +37,23 @@ export function getCurrentUser(): Promise<User> {
   return apiRequest<User>("/auth/me");
 }
 
+export function requestPasswordReset(email: string): Promise<void> {
+  return apiRequest<void>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  return apiRequest<void>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
 export function logoutUser(): void {
   const refreshToken = getRefreshToken();
 

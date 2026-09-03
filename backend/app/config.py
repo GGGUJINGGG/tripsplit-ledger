@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 30
+    password_reset_token_expire_minutes: int = 60
+    # Used to build the link that goes into the password-reset email.
+    frontend_base_url: str = "http://localhost:5173"
     # In-memory rate limiting for auth endpoints. Single-instance only —
     # fine for this app's one Railway container, but wouldn't share
     # state across multiple instances behind a load balancer.
@@ -39,6 +42,8 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = 60
     register_rate_limit_attempts: int = 10
     register_rate_limit_window_seconds: int = 3600
+    forgot_password_rate_limit_attempts: int = 5
+    forgot_password_rate_limit_window_seconds: int = 3600
     # Comma-separated list of origins allowed to call this API.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

@@ -11,6 +11,8 @@ class RateLimitingTests(DatabaseTestCase):
         settings.login_rate_limit_window_seconds = 60
         settings.register_rate_limit_attempts = 2
         settings.register_rate_limit_window_seconds = 60
+        settings.forgot_password_rate_limit_attempts = 2
+        settings.forgot_password_rate_limit_window_seconds = 60
         reset_rate_limits()
 
     def tearDown(self) -> None:
@@ -18,6 +20,8 @@ class RateLimitingTests(DatabaseTestCase):
         settings.login_rate_limit_window_seconds = 60
         settings.register_rate_limit_attempts = 10
         settings.register_rate_limit_window_seconds = 3600
+        settings.forgot_password_rate_limit_attempts = 5
+        settings.forgot_password_rate_limit_window_seconds = 3600
         super().tearDown()
 
     def test_login_is_rate_limited_after_repeated_attempts(self) -> None:
@@ -89,6 +93,18 @@ class RateLimitingTests(DatabaseTestCase):
             },
         )
         self.assertEqual(response.status_code, 201)
+
+    def test_forgot_password_is_rate_limited_after_repeated_attempts(self) -> None:
+        payload = {"email": "nobody@example.com"}
+
+        for _ in range(2):
+            response = self.client.post("/api/auth/forgot-password", json=payload)
+            self.assertEqual(response.status_code, 202)
+
+        limited_response = self.client.post(
+            "/api/auth/forgot-password", json=payload
+        )
+        self.assertEqual(limited_response.status_code, 429)
 
     def test_disabled_rate_limiting_never_blocks(self) -> None:
         settings.rate_limit_enabled = False

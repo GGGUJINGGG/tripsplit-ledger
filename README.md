@@ -51,6 +51,8 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
 - **No frontend UI for trip renaming/deletion or inviting members beyond the invite form** — the API enforces owner-only rules for these, but only invite-by-email has a frontend entry point today.
+- **Password reset emails aren't actually emailed** — no transactional email provider (SES, Resend, SendGrid, ...) is configured, so `POST /auth/forgot-password` logs the reset link server-side instead of sending it. The rest of the flow (single-use, hashed, time-limited tokens; forced logout of other sessions on reset) is real and tested; only the delivery mechanism is a stand-in.
+- **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
 
 ## Planned
 
@@ -62,11 +64,11 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 ```mermaid
 flowchart LR
     subgraph Client["Browser"]
-        FE["React 19 + Vite SPA<br/>JWT stored in localStorage"]
+        FE["React 19 + Vite SPA<br/>access + refresh JWT in localStorage"]
     end
 
     subgraph Server["FastAPI backend"]
-        Auth["/api/auth<br/>register · login · me"]
+        Auth["/api/auth<br/>register · login · refresh · logout ·<br/>forgot/reset-password · me"]
         Trips["/api/trips<br/>trips · participants · expenses"]
         Dash["/api/trips/{id}/dashboard"]
         Settle["/api/trips/{id}/settlements"]
@@ -84,7 +86,9 @@ flowchart LR
     Settle --> DB
 ```
 
-Every route except `/api/auth/register` and `/api/auth/login` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables — the frontend consumes those endpoints directly rather than recomputing balances client-side.
+Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables — the frontend consumes those endpoints directly rather than recomputing balances client-side.
+
+Access tokens expire after 30 minutes; the frontend transparently exchanges the (longer-lived, rotating) refresh token for a new one on a 401 instead of forcing a re-login. `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP.
 
 ### Database schema
 
@@ -249,6 +253,18 @@ Once both are live, walk through this once end-to-end:
 - [ ] Register a second account and confirm it can't see the first account's trips
 
 ## API Overview
+
+Authentication:
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+GET  /api/auth/me
+```
 
 Trips:
 
