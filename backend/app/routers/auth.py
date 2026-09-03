@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth_dependencies import get_current_user
+from app.config import settings
 from app.database import get_db
 from app.orm_models import RefreshToken, User
+from app.rate_limit import enforce_rate_limit
 from app.schemas import (
     RefreshTokenRequest,
     TokenResponse,
@@ -54,9 +56,17 @@ def _issue_token_pair(user: User, db: Session) -> TokenResponse:
     status_code=status.HTTP_201_CREATED,
 )
 def register_user(
+    request: Request,
     payload: UserCreate,
     db: Session = Depends(get_db),
 ) -> User:
+    enforce_rate_limit(
+        request,
+        scope="register",
+        max_attempts=settings.register_rate_limit_attempts,
+        window_seconds=settings.register_rate_limit_window_seconds,
+    )
+
     normalized_email = str(payload.email).strip().lower()
 
     existing_user = db.scalar(
@@ -84,9 +94,17 @@ def register_user(
     response_model=TokenResponse,
 )
 def login_user(
+    request: Request,
     payload: UserLogin,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
+    enforce_rate_limit(
+        request,
+        scope="login",
+        max_attempts=settings.login_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
+    )
+
     normalized_email = str(payload.email).strip().lower()
 
     user = db.scalar(
