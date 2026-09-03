@@ -40,6 +40,10 @@ a {
   padding: 24px 18px;
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
@@ -591,6 +595,9 @@ th {
     flex-direction: row;
     justify-content: space-between;
     padding: 14px 18px;
+    position: static;
+    height: auto;
+    overflow-y: visible;
   }
 
   .sidebar-account {
