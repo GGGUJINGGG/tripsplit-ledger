@@ -43,7 +43,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install backend dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Audit backend dependencies for known vulnerabilities
         run: |
@@ -74,8 +74,10 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://tripsplit:tripsplit@localhost:5432/tripsplit_test
 
-      - name: Run backend tests
-        run: python -m unittest discover -s tests
+      - name: Run backend tests with coverage
+        run: |
+          coverage run --source=app -m unittest discover -s tests
+          coverage report -m --fail-under=90
 
   frontend:
     runs-on: ubuntu-latest

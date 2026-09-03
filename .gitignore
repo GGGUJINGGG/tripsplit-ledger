@@ -9,3 +9,5 @@ dist/
 backend/app/data/
 .env
 backend/.env
+.coverage
+htmlcov/

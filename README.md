@@ -359,6 +359,14 @@ python -m unittest discover -s tests
 
 Each integration test runs inside a database transaction that is rolled back after the test.
 
+To see coverage (also enforced in CI with a 90% floor):
+
+```bash
+pip install -r requirements-dev.txt
+coverage run --source=app -m unittest discover -s tests
+coverage report -m
+```
+
 Frontend tests use Vitest and React Testing Library and don't need a database or a running backend — API calls are mocked. Run them from the `frontend` directory:
 
 ```bash
