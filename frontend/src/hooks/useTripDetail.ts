@@ -132,6 +132,26 @@ export function useTripDetail(tripId: string | undefined) {
       .sort((first, second) => second.total - first.total);
   }, [trip]);
 
+  const dailySpendingByCurrency = useMemo(() => {
+    const totals = new Map<string, { date: string; currency: CurrencyCode; amount: number }>();
+
+    for (const expense of trip?.expenses ?? []) {
+      const expenseCurrency = normalizeCurrency(expense.currency);
+      const key = `${expense.date}:${expenseCurrency}`;
+      const current = totals.get(key) ?? {
+        date: expense.date,
+        currency: expenseCurrency,
+        amount: 0,
+      };
+      current.amount += expense.amount;
+      totals.set(key, current);
+    }
+
+    return Array.from(totals.values()).sort((first, second) =>
+      first.date.localeCompare(second.date),
+    );
+  }, [trip]);
+
   const tripCurrencyCodes = useMemo(() => {
     return Array.from(
       new Set((trip?.expenses ?? []).map((expense) => normalizeCurrency(expense.currency))),
@@ -367,6 +387,7 @@ export function useTripDetail(tripId: string | undefined) {
     sharedSpendingByCurrency,
     personalSpendingByCurrency,
     categorySummary,
+    dailySpendingByCurrency,
     participantSpendingSummary,
     settlementCurrency,
     addParticipant,

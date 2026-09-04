@@ -384,6 +384,20 @@ button:disabled {
   overflow-x: auto;
 }
 
+.chart-wrap {
+  min-width: 0;
+  width: 100%;
+}
+
+.chart-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.even-columns {
+  grid-template-columns: 1fr 1fr;
+}
+
 table {
   border-collapse: collapse;
   min-width: 100%;
@@ -660,6 +674,7 @@ th {
   }
 
   .two-columns,
+  .even-columns,
   .summary-row,
   .form-grid.compact,
   .filter-grid {

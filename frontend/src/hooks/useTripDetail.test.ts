@@ -281,4 +281,83 @@ describe("useTripDetail", () => {
     expect(deletePayment).toHaveBeenCalledWith("trip-1", "payment-1");
     expect(getTrip).toHaveBeenCalledTimes(2);
   });
+
+  it("groups daily spending by date and currency, sorted chronologically", async () => {
+    const trip = buildTrip({
+      expenses: [
+        {
+          id: "e1",
+          trip_id: "trip-1",
+          title: "Dinner",
+          amount: 40,
+          paid_by: "p1",
+          split_among: ["p1", "p2"],
+          expense_type: "shared",
+          category: "food",
+          date: "2026-07-02",
+          currency: "USD",
+          note: null,
+          created_at: "2026-07-02T00:00:00Z",
+          updated_at: "2026-07-02T00:00:00Z",
+        },
+        {
+          id: "e2",
+          trip_id: "trip-1",
+          title: "Hotel",
+          amount: 100,
+          paid_by: "p1",
+          split_among: ["p1", "p2"],
+          expense_type: "shared",
+          category: "hotel",
+          date: "2026-07-01",
+          currency: "USD",
+          note: null,
+          created_at: "2026-07-01T00:00:00Z",
+          updated_at: "2026-07-01T00:00:00Z",
+        },
+        {
+          id: "e3",
+          trip_id: "trip-1",
+          title: "Taxi",
+          amount: 20,
+          paid_by: "p1",
+          split_among: ["p1"],
+          expense_type: "personal",
+          category: "transportation",
+          date: "2026-07-01",
+          currency: "USD",
+          note: null,
+          created_at: "2026-07-01T01:00:00Z",
+          updated_at: "2026-07-01T01:00:00Z",
+        },
+        {
+          id: "e4",
+          trip_id: "trip-1",
+          title: "Parking",
+          amount: 30,
+          paid_by: "p1",
+          split_among: ["p1", "p2"],
+          expense_type: "shared",
+          category: "transportation",
+          date: "2026-07-01",
+          currency: "CNY",
+          note: null,
+          created_at: "2026-07-01T02:00:00Z",
+          updated_at: "2026-07-01T02:00:00Z",
+        },
+      ],
+    });
+    vi.mocked(getTrip).mockResolvedValue(trip);
+    vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+    vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+
+    const { result } = renderHook(() => useTripDetail("trip-1"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.dailySpendingByCurrency).toEqual([
+      { date: "2026-07-01", currency: "USD", amount: 120 },
+      { date: "2026-07-01", currency: "CNY", amount: 30 },
+      { date: "2026-07-02", currency: "USD", amount: 40 },
+    ]);
+  });
 });

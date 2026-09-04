@@ -2,13 +2,16 @@ import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import CategoryBreakdown from "../components/trip/CategoryBreakdown";
+import CategoryPieChart from "../components/trip/CategoryPieChart";
 import DashboardSummary from "../components/trip/DashboardSummary";
 import ExpenseForm from "../components/trip/ExpenseForm";
 import ExpenseTable from "../components/trip/ExpenseTable";
+import ParticipantPaidChart from "../components/trip/ParticipantPaidChart";
 import ParticipantsPanel from "../components/trip/ParticipantsPanel";
 import ParticipantSummary from "../components/trip/ParticipantSummary";
 import PaymentsPanel from "../components/trip/PaymentsPanel";
 import SettlementPanel from "../components/trip/SettlementPanel";
+import SpendingTrendChart from "../components/trip/SpendingTrendChart";
 import TripHeader from "../components/trip/TripHeader";
 import { useAuth } from "../auth/AuthContext";
 import { useExpenseFilters } from "../hooks/useExpenseFilters";
@@ -31,6 +34,7 @@ export default function TripDetailPage() {
     sharedSpendingByCurrency,
     personalSpendingByCurrency,
     categorySummary,
+    dailySpendingByCurrency,
     participantSpendingSummary,
     settlementCurrency,
     addParticipant,
@@ -167,6 +171,13 @@ export default function TripDetailPage() {
         onRecordPayment={recordPayment}
         onRemovePayment={removePayment}
       />
+
+      <SpendingTrendChart dailySpendingByCurrency={dailySpendingByCurrency} />
+
+      <div className="content-grid even-columns">
+        <CategoryPieChart categorySummary={categorySummary} />
+        <ParticipantPaidChart summary={participantSpendingSummary} />
+      </div>
 
       <CategoryBreakdown categorySummary={categorySummary} />
 
