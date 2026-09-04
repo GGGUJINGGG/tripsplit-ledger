@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     sentry_dsn: Optional[str] = None
     sentry_environment: str = "development"
     sentry_traces_sample_rate: float = 0.0
+    # Real email delivery is opt-in too: unset by default, so
+    # send_password_reset_email/send_trip_invite_email just log the
+    # link (as before) until a Resend API key is provided. Without a
+    # verified domain, Resend only allows the default resend.dev
+    # sender and only delivers to the Resend account's own email.
+    resend_api_key: Optional[str] = None
+    resend_from_email: str = "TripSplit Ledger <onboarding@resend.dev>"
     # Comma-separated list of origins allowed to call this API.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

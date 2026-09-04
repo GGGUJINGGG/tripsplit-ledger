@@ -33,6 +33,14 @@ class DatabaseTestCase(unittest.TestCase):
         settings.rate_limit_enabled = False
         reset_rate_limits()
 
+        # Force email delivery off regardless of what a developer's
+        # local .env has configured — tests must never depend on (or
+        # burn through the quota of) a real Resend account. Whatever
+        # key is or isn't set locally, the suite always exercises the
+        # log-only fallback path; test_email.py covers the Resend path
+        # directly with a mocked client.
+        settings.resend_api_key = None
+
         self.connection = test_engine.connect()
         self.transaction = self.connection.begin()
         self.session = Session(
@@ -54,6 +62,7 @@ class DatabaseTestCase(unittest.TestCase):
         self.connection.close()
         settings.rate_limit_enabled = False
         reset_rate_limits()
+        settings.resend_api_key = None
 
 
 class AuthenticatedDatabaseTestCase(DatabaseTestCase):
