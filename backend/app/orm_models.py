@@ -153,6 +153,19 @@ class Trip(TimestampMixin, Base):
         Date,
         nullable=True,
     )
+    # Settlement-reminder bookkeeping (app/services/reminders.py). A
+    # dated trip gets exactly one reminder, the day after it ends; an
+    # undated trip gets one every Monday for as long as debt remains.
+    # Both are nullable and unrelated to each other — a trip only ever
+    # uses the one that matches whether it has an end_date.
+    end_date_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_weekly_reminder_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
 
     members: Mapped[list[TripMember]] = relationship(
         back_populates="trip",

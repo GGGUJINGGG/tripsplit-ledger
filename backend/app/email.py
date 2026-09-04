@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import resend
 
@@ -86,4 +87,41 @@ def send_trip_invite_email(to_email: str, trip_name: str, action_url: str) -> No
         to_email,
         trip_name,
         action_url,
+    )
+
+
+def send_settlement_reminder_email(
+    to_email: str,
+    trip_name: str,
+    debts: list[dict[str, Any]],
+    trip_url: str,
+) -> None:
+    """Remind someone what they still owe on a trip. `debts` is that
+    person's own outstanding settlements — each a
+    {"to_name", "amount", "currency"} dict, as produced by
+    app.services.reminders — never anyone else's.
+
+    Same Resend-or-log stand-in as the other transactional emails.
+    """
+    debt_lines = "".join(
+        f"<li>Pay {debt['to_name']}: {debt['currency']} {debt['amount']:.2f}</li>"
+        for debt in debts
+    )
+
+    if settings.resend_api_key:
+        _send_via_resend(
+            to_email,
+            f'You still owe money on "{trip_name}"',
+            f'<p>You still have outstanding balances on "{trip_name}":</p>'
+            f"<ul>{debt_lines}</ul>"
+            f'<p><a href="{trip_url}">View the trip</a></p>',
+        )
+        return
+
+    logger.info(
+        "Settlement reminder for %s on '%s': %s — view at %s",
+        to_email,
+        trip_name,
+        debts,
+        trip_url,
     )

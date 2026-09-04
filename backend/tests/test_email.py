@@ -3,7 +3,11 @@ import unittest
 from unittest.mock import patch
 
 from app.config import settings
-from app.email import send_password_reset_email, send_trip_invite_email
+from app.email import (
+    send_password_reset_email,
+    send_settlement_reminder_email,
+    send_trip_invite_email,
+)
 
 
 class EmailTests(unittest.TestCase):
@@ -78,6 +82,50 @@ class EmailTests(unittest.TestCase):
         self.assertEqual(call_args["to"], ["user@example.com"])
         self.assertIn("Iceland Trip", call_args["subject"])
         self.assertIn("https://example.com/", call_args["html"])
+
+    def test_settlement_reminder_logs_debts_when_resend_is_not_configured(
+        self,
+    ) -> None:
+        settings.resend_api_key = None
+
+        with self.assertLogs("app.email", level="INFO") as captured:
+            send_settlement_reminder_email(
+                "maya@example.com",
+                "Iceland Trip",
+                [{"to_name": "Alex", "amount": 40.0, "currency": "USD"}],
+                "https://example.com/trips/trip-1",
+            )
+
+        self.assertTrue(
+            any(
+                "maya@example.com" in message
+                and "Iceland Trip" in message
+                and "https://example.com/trips/trip-1" in message
+                for message in captured.output
+            )
+        )
+
+    def test_settlement_reminder_calls_resend_when_configured(self) -> None:
+        settings.resend_api_key = "re_fake_key_for_testing"
+
+        with patch("app.email.resend.Emails.send") as mock_send:
+            send_settlement_reminder_email(
+                "maya@example.com",
+                "Iceland Trip",
+                [
+                    {"to_name": "Alex", "amount": 40.0, "currency": "USD"},
+                    {"to_name": "Sam", "amount": 15.5, "currency": "EUR"},
+                ],
+                "https://example.com/trips/trip-1",
+            )
+
+        mock_send.assert_called_once()
+        call_args = mock_send.call_args[0][0]
+        self.assertEqual(call_args["to"], ["maya@example.com"])
+        self.assertIn("Iceland Trip", call_args["subject"])
+        self.assertIn("Pay Alex: USD 40.00", call_args["html"])
+        self.assertIn("Pay Sam: EUR 15.50", call_args["html"])
+        self.assertIn("https://example.com/trips/trip-1", call_args["html"])
 
     def test_resend_failure_is_logged_and_swallowed_not_raised(self) -> None:
         settings.resend_api_key = "re_fake_key_for_testing"
