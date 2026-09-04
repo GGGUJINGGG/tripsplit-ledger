@@ -129,11 +129,7 @@ export default function TripDetailPage() {
         settlementCurrency={settlementCurrency}
       />
 
-      <SettlementPanel
-        tripId={trip.id}
-        settlements={settlements}
-        settlementCurrency={settlementCurrency}
-      />
+      <SettlementPanel tripId={trip.id} settlements={settlements} />
 
       <div className="content-grid two-columns">
         <ParticipantsPanel

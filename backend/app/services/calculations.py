@@ -104,6 +104,7 @@ def split_cents_evenly(
 def paid_by_person_cents(
     trip: Any,
     shared_only: bool = False,
+    currency: str | None = None,
 ) -> dict[Any, int]:
     participants = get_participants(trip)
     paid_totals = {
@@ -114,6 +115,8 @@ def paid_by_person_cents(
     for expense in trip.expenses:
         if shared_only and not is_shared_expense(expense):
             continue
+        if currency is not None and expense.currency != currency:
+            continue
 
         paid_totals[get_paid_by_id(expense)] += (
             amount_to_cents(expense.amount)
@@ -122,7 +125,10 @@ def paid_by_person_cents(
     return paid_totals
 
 
-def owed_by_person_cents(trip: Any) -> dict[Any, int]:
+def owed_by_person_cents(
+    trip: Any,
+    currency: str | None = None,
+) -> dict[Any, int]:
     participants = get_participants(trip)
     owed_totals = {
         participant.id: 0
@@ -131,6 +137,8 @@ def owed_by_person_cents(trip: Any) -> dict[Any, int]:
 
     for expense in trip.expenses:
         if not is_shared_expense(expense):
+            continue
+        if currency is not None and expense.currency != currency:
             continue
 
         amount_cents = amount_to_cents(expense.amount)
@@ -144,13 +152,17 @@ def owed_by_person_cents(trip: Any) -> dict[Any, int]:
     return owed_totals
 
 
-def net_balances_cents(trip: Any) -> dict[Any, int]:
+def net_balances_cents(
+    trip: Any,
+    currency: str | None = None,
+) -> dict[Any, int]:
     participants = get_participants(trip)
     paid_totals = paid_by_person_cents(
         trip,
         shared_only=True,
+        currency=currency,
     )
-    owed_totals = owed_by_person_cents(trip)
+    owed_totals = owed_by_person_cents(trip, currency=currency)
 
     return {
         participant.id: (

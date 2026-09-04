@@ -9,7 +9,7 @@ from app.database import get_db
 from app.orm_models import Expense, Trip, TripMember, User
 from app.schemas import SettlementSummary
 from app.services.calculations import filter_visible_expenses
-from app.services.settlements import MixedCurrencyError, simplify_settlements
+from app.services.settlements import simplify_settlements
 
 
 router = APIRouter(
@@ -48,12 +48,6 @@ def get_settlements(
             detail="Trip not found",
         )
 
-    try:
-        return simplify_settlements(
-            filter_visible_expenses(trip, current_user.id)
-        )
-    except MixedCurrencyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    return simplify_settlements(
+        filter_visible_expenses(trip, current_user.id)
+    )

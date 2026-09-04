@@ -4,18 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { getSettlements } from "../api/settlements";
 import { getTrip } from "../api/trips";
 import type { Settlement, Trip } from "../types";
-
-function expenseCurrencyCodes(trip: Trip | null): string[] {
-  return Array.from(
-    new Set(
-      trip?.expenses.map((expense) => (expense.currency ?? "USD").toUpperCase()) ?? [],
-    ),
-  );
-}
-
-function formatSettlementAmount(currency: string, amount: number): string {
-  return `${currency} ${amount.toFixed(2)}`;
-}
+import { formatMoney } from "../utils/currency";
 
 export default function SettlementPage() {
   const { tripId } = useParams();
@@ -23,10 +12,6 @@ export default function SettlementPage() {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const currencyCodes = expenseCurrencyCodes(trip);
-  const settlementCurrency =
-    currencyCodes.length <= 1 ? currencyCodes[0] ?? "USD" : null;
 
   useEffect(() => {
     async function loadSettlements() {
@@ -78,11 +63,6 @@ export default function SettlementPage() {
 
         {settlements.length === 0 ? (
           <p className="empty-state">Everyone is settled.</p>
-        ) : settlementCurrency === null ? (
-          <p className="empty-state">
-            Settlements are hidden for mixed-currency trips until exchange-rate
-            conversion is supported.
-          </p>
         ) : (
           <div className="table-wrap">
             <table>
@@ -96,13 +76,11 @@ export default function SettlementPage() {
               <tbody>
                 {settlements.map((settlement) => (
                   <tr
-                    key={`${settlement.from_participant_id}-${settlement.to_participant_id}`}
+                    key={`${settlement.from_participant_id}-${settlement.to_participant_id}-${settlement.currency}`}
                   >
                     <td>{settlement.from_name}</td>
                     <td>{settlement.to_name}</td>
-                    <td>
-                      {formatSettlementAmount(settlementCurrency, settlement.amount)}
-                    </td>
+                    <td>{formatMoney(settlement.currency, settlement.amount)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -10,23 +10,28 @@ from app.services.calculations import (
 )
 
 
-class MixedCurrencyError(ValueError):
-    pass
-
-
 def simplify_settlements(trip: Any) -> SettlementSummary:
-    shared_currencies = {
-        expense.currency
-        for expense in trip.expenses
-        if is_shared_expense(expense)
-    }
-    if len(shared_currencies) > 1:
-        raise MixedCurrencyError(
-            "Trip has shared expenses in multiple currencies; "
-            "cannot generate settlements"
+    shared_currencies = sorted(
+        {
+            expense.currency
+            for expense in trip.expenses
+            if is_shared_expense(expense)
+        }
+    )
+
+    settlements: list[Settlement] = []
+    for currency in shared_currencies:
+        settlements.extend(
+            _simplify_settlements_for_currency(trip, currency)
         )
 
-    balances = net_balances_cents(trip)
+    return SettlementSummary(settlements=settlements)
+
+
+def _simplify_settlements_for_currency(
+    trip: Any, currency: str
+) -> list[Settlement]:
+    balances = net_balances_cents(trip, currency=currency)
     participants = get_participants(trip)
 
     participants_by_id = {
@@ -93,6 +98,7 @@ def simplify_settlements(trip: Any) -> SettlementSummary:
                         creditor["participant_id"]
                     ],
                     amount=cents_to_float(payment_cents),
+                    currency=currency,
                 )
             )
 
@@ -105,4 +111,4 @@ def simplify_settlements(trip: Any) -> SettlementSummary:
         if creditor["amount"] == 0:
             creditor_index += 1
 
-    return SettlementSummary(settlements=settlements)
+    return settlements

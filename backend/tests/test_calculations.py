@@ -8,7 +8,7 @@ from app.services.calculations import (
     is_expense_visible,
     split_cents_evenly,
 )
-from app.services.settlements import MixedCurrencyError, simplify_settlements
+from app.services.settlements import simplify_settlements
 
 
 class CalculationTests(unittest.TestCase):
@@ -122,17 +122,37 @@ class CalculationTests(unittest.TestCase):
                     settlement.from_participant_id,
                     settlement.to_participant_id,
                     settlement.amount,
+                    settlement.currency,
                 )
                 for settlement in settlement_summary.settlements
             ],
-            [("sam", "alex", 100), ("maya", "alex", 40)],
+            [("sam", "alex", 100, "USD"), ("maya", "alex", 40, "USD")],
         )
 
-    def test_settlements_reject_mixed_currency_shared_expenses(self) -> None:
+    def test_settlements_are_computed_independently_per_currency(self) -> None:
+        # Dinner moves to EUR, leaving Hotel+Gas in USD. The two currencies
+        # must settle independently rather than being netted together.
         self.trip.expenses[1].currency = "EUR"
 
-        with self.assertRaises(MixedCurrencyError):
-            simplify_settlements(self.trip)
+        settlement_summary = simplify_settlements(self.trip)
+
+        self.assertEqual(
+            [
+                (
+                    settlement.from_participant_id,
+                    settlement.to_participant_id,
+                    settlement.amount,
+                    settlement.currency,
+                )
+                for settlement in settlement_summary.settlements
+            ],
+            [
+                ("alex", "maya", 30, "EUR"),
+                ("sam", "maya", 30, "EUR"),
+                ("maya", "alex", 100, "USD"),
+                ("sam", "alex", 70, "USD"),
+            ],
+        )
 
 
 class SplitCentsEvenlyTests(unittest.TestCase):

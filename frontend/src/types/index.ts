@@ -88,6 +88,7 @@ export interface Settlement {
   to_participant_id: string;
   to_name: string;
   amount: number;
+  currency: string;
 }
 
 export interface SettlementSummary {

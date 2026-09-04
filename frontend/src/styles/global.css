@@ -458,6 +458,20 @@ th {
   font-weight: 400;
 }
 
+.settlement-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.settlement-currency-heading {
+  color: #687381;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
 .settlement-list {
   display: grid;
   gap: 10px;

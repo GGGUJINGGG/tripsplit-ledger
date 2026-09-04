@@ -222,6 +222,7 @@ class Settlement(BaseModel):
     to_participant_id: str
     to_name: str
     amount: float
+    currency: str
 
 
 class SettlementSummary(BaseModel):

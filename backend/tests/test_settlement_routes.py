@@ -147,7 +147,7 @@ class SettlementRouteTests(AuthenticatedDatabaseTestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_settlements_reject_mixed_currency_trip(self) -> None:
+    def test_settlements_are_computed_independently_per_currency(self) -> None:
         trip = self.client.post(
             "/api/trips",
             json={
@@ -196,7 +196,22 @@ class SettlementRouteTests(AuthenticatedDatabaseTestCase):
             f"/api/trips/{trip['id']}/settlements"
         )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
+
+        settlements = {
+            settlement["currency"]: settlement
+            for settlement in response.json()["settlements"]
+        }
+
+        self.assertEqual(set(settlements), {"USD", "EUR"})
+
+        self.assertEqual(settlements["USD"]["from_participant_id"], maya["id"])
+        self.assertEqual(settlements["USD"]["to_participant_id"], alex["id"])
+        self.assertEqual(settlements["USD"]["amount"], 50)
+
+        self.assertEqual(settlements["EUR"]["from_participant_id"], alex["id"])
+        self.assertEqual(settlements["EUR"]["to_participant_id"], maya["id"])
+        self.assertEqual(settlements["EUR"]["amount"], 25)
 
     def test_settlements_require_authentication(self) -> None:
         trip = self.client.post(
