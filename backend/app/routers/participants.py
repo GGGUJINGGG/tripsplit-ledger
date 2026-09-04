@@ -106,36 +106,18 @@ def invite_member(
     )
 
     if invited_user is not None:
-        existing_membership = db.scalar(
+        already_member = db.scalar(
             select(TripMember).where(
                 TripMember.trip_id == trip_id,
                 TripMember.user_id == invited_user.id,
             )
         )
-        if existing_membership is not None:
+        if already_member is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User is already a member of this trip",
             )
 
-        member = TripMember(
-            trip_id=trip.id,
-            user_id=invited_user.id,
-            display_name=invited_user.display_name,
-            role=MemberRole.MEMBER,
-        )
-        trip.updated_at = datetime.now(UTC)
-
-        db.add(member)
-        db.commit()
-        db.refresh(member)
-        return member
-
-    # No account exists for this email yet. Add a placeholder member —
-    # visible in the trip right away — that gets automatically claimed
-    # the moment someone registers with this address (see
-    # register_user() in app/routers/auth.py), and email them a link
-    # to register.
     existing_invite = db.scalar(
         select(TripMember).where(
             TripMember.trip_id == trip_id,
@@ -149,6 +131,12 @@ def invite_member(
             detail="This email has already been invited to this trip",
         )
 
+    # Whether or not this email already has an account, an invite is
+    # just a pending placeholder — visible in the trip right away, but
+    # not a real membership until it's explicitly accepted. An
+    # unregistered email accepts by registering (see
+    # register_user()); a registered one accepts from their
+    # pending-invitations list (see routers/invitations.py).
     member = TripMember(
         trip_id=trip.id,
         display_name=normalized_email,
@@ -161,11 +149,14 @@ def invite_member(
     db.commit()
     db.refresh(member)
 
-    register_url = (
-        f"{settings.frontend_base_url.rstrip('/')}"
-        f"/register?email={quote(normalized_email)}"
-    )
-    send_trip_invite_email(normalized_email, trip.name, register_url)
+    if invited_user is not None:
+        action_url = f"{settings.frontend_base_url.rstrip('/')}/"
+    else:
+        action_url = (
+            f"{settings.frontend_base_url.rstrip('/')}"
+            f"/register?email={quote(normalized_email)}"
+        )
+    send_trip_invite_email(normalized_email, trip.name, action_url)
 
     return member
 

@@ -424,6 +424,11 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
             json={"email": "member@example.com"},
         )
         self.assertEqual(invite_response.status_code, 201)
+        accept_response = self.client.post(
+            f"/api/invitations/{invite_response.json()['id']}/accept",
+            headers=member_headers,
+        )
+        self.assertEqual(accept_response.status_code, 200)
 
         personal_expense = self.client.post(
             f"/api/trips/{trip['id']}/expenses",
@@ -583,7 +588,13 @@ class ExpenseRouteTests(AuthenticatedDatabaseTestCase):
             json={"email": "pagination-member@example.com"},
         )
         self.assertEqual(invite_response.status_code, 201)
-        member = invite_response.json()
+        member_id = invite_response.json()["id"]
+        accept_response = self.client.post(
+            f"/api/invitations/{member_id}/accept",
+            headers=member_headers,
+        )
+        self.assertEqual(accept_response.status_code, 200)
+        member = accept_response.json()
 
         self.client.post(
             f"/api/trips/{trip['id']}/expenses",

@@ -39,6 +39,27 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
         self.assertEqual(response.status_code, 201)
         return response.json()
 
+    def invite_and_accept(
+        self, trip_id: str, email: str, invitee_headers: dict
+    ) -> dict:
+        """Invite a registered user and have them accept immediately —
+        the setup most tests actually want when they need a real
+        (not just pending) trip member.
+        """
+        invite_response = self.client.post(
+            f"/api/trips/{trip_id}/participants/invite",
+            json={"email": email},
+        )
+        self.assertEqual(invite_response.status_code, 201)
+        invitation_id = invite_response.json()["id"]
+
+        accept_response = self.client.post(
+            f"/api/invitations/{invitation_id}/accept",
+            headers=invitee_headers,
+        )
+        self.assertEqual(accept_response.status_code, 200)
+        return accept_response.json()
+
     def test_create_and_list_participants(self) -> None:
         trip = self.create_trip()
         owner = trip["participants"][0]
@@ -191,8 +212,34 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
             json={"email": "invitee@example.com"},
         )
 
+        # Inviting a registered user creates a pending placeholder too —
+        # they aren't a real member (and can't see the trip) until they
+        # explicitly accept.
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["name"], "Invitee Person")
+        self.assertIsNone(response.json()["user_id"])
+        self.assertEqual(response.json()["name"], "invitee@example.com")
+        invitation_id = response.json()["id"]
+
+        pre_accept_view = self.client.get(
+            f"/api/trips/{trip['id']}",
+            headers=invitee_headers,
+        )
+        self.assertEqual(pre_accept_view.status_code, 404)
+
+        pending = self.client.get(
+            "/api/invitations",
+            headers=invitee_headers,
+        ).json()
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["trip_id"], trip["id"])
+        self.assertEqual(pending[0]["trip_name"], trip["name"])
+
+        accept_response = self.client.post(
+            f"/api/invitations/{invitation_id}/accept",
+            headers=invitee_headers,
+        )
+        self.assertEqual(accept_response.status_code, 200)
+        self.assertEqual(accept_response.json()["name"], "Invitee Person")
 
         trip_response = self.client.get(
             f"/api/trips/{trip['id']}/participants"
@@ -247,10 +294,7 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
         member_headers = self.register_and_login(
             "member@example.com", "Member"
         )
-        self.client.post(
-            f"/api/trips/{trip['id']}/participants/invite",
-            json={"email": "member@example.com"},
-        )
+        self.invite_and_accept(trip["id"], "member@example.com", member_headers)
 
         response = self.client.post(
             f"/api/trips/{trip['id']}/participants/invite",
@@ -260,7 +304,9 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_invite_rejects_existing_member(self) -> None:
+    def test_invite_of_registered_email_rejects_duplicate_pending_invite(
+        self,
+    ) -> None:
         trip = self.create_trip()
         self.register_and_login("invitee@example.com", "Invitee Person")
 
@@ -275,16 +321,36 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
             json={"email": "invitee@example.com"},
         )
         self.assertEqual(second_response.status_code, 409)
+        self.assertEqual(
+            second_response.json()["detail"],
+            "This email has already been invited to this trip",
+        )
+
+    def test_invite_rejects_already_accepted_member(self) -> None:
+        trip = self.create_trip()
+        invitee_headers = self.register_and_login(
+            "invitee@example.com", "Invitee Person"
+        )
+        self.invite_and_accept(
+            trip["id"], "invitee@example.com", invitee_headers
+        )
+
+        response = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "invitee@example.com"},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            "User is already a member of this trip",
+        )
 
     def test_member_cannot_invite_others(self) -> None:
         trip = self.create_trip()
         member_headers = self.register_and_login(
             "member@example.com", "Trip Member"
         )
-        self.client.post(
-            f"/api/trips/{trip['id']}/participants/invite",
-            json={"email": "member@example.com"},
-        )
+        self.invite_and_accept(trip["id"], "member@example.com", member_headers)
         self.register_and_login("third-party@example.com", "Third Party")
 
         response = self.client.post(

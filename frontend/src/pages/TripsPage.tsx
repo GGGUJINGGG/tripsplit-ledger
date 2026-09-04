@@ -1,17 +1,20 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 
+import { acceptInvitation, declineInvitation, getMyInvitations } from "../api/invitations";
 import { createTrip, getTrips } from "../api/trips";
-import type { Trip } from "../types";
+import type { PendingInvitation, Trip } from "../types";
 
 export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [respondingToId, setRespondingToId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadTrips() {
@@ -26,8 +29,17 @@ export default function TripsPage() {
     }
   }
 
+  async function loadInvitations() {
+    try {
+      setInvitations(await getMyInvitations());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load invitations");
+    }
+  }
+
   useEffect(() => {
     void loadTrips();
+    void loadInvitations();
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -56,6 +68,32 @@ export default function TripsPage() {
     }
   }
 
+  async function handleAccept(invitation: PendingInvitation) {
+    setRespondingToId(invitation.id);
+    setError(null);
+    try {
+      await acceptInvitation(invitation.id);
+      await Promise.all([loadTrips(), loadInvitations()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to accept invitation");
+    } finally {
+      setRespondingToId(null);
+    }
+  }
+
+  async function handleDecline(invitation: PendingInvitation) {
+    setRespondingToId(invitation.id);
+    setError(null);
+    try {
+      await declineInvitation(invitation.id);
+      await loadInvitations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to decline invitation");
+    } finally {
+      setRespondingToId(null);
+    }
+  }
+
   return (
     <section className="page-stack">
       <header className="page-header">
@@ -66,6 +104,43 @@ export default function TripsPage() {
       </header>
 
       {error ? <div className="alert">{error}</div> : null}
+
+      {invitations.length > 0 ? (
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>Pending Invites</h2>
+          </div>
+          <div className="list-stack">
+            {invitations.map((invitation) => (
+              <div className="list-row" key={invitation.id}>
+                <span>You've been invited to "{invitation.trip_name}"</span>
+                <div className="header-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => void handleAccept(invitation)}
+                    disabled={respondingToId === invitation.id}
+                    aria-label={`Accept invite to ${invitation.trip_name}`}
+                    title="Accept"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    className="ghost-icon-button"
+                    type="button"
+                    onClick={() => void handleDecline(invitation)}
+                    disabled={respondingToId === invitation.id}
+                    aria-label={`Decline invite to ${invitation.trip_name}`}
+                    title="Decline"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="content-grid two-columns">
         <section className="panel">

@@ -111,7 +111,12 @@ class DashboardRouteTests(AuthenticatedDatabaseTestCase):
             json={"email": "member@example.com"},
         )
         self.assertEqual(invite_response.status_code, 201)
-        member = invite_response.json()
+        accept_response = self.client.post(
+            f"/api/invitations/{invite_response.json()['id']}/accept",
+            headers=member_headers,
+        )
+        self.assertEqual(accept_response.status_code, 200)
+        member = accept_response.json()
 
         # A shared expense both should see.
         self.client.post(

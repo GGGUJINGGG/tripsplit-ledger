@@ -18,6 +18,13 @@ export interface Participant {
   role: MemberRole;
 }
 
+export interface PendingInvitation {
+  id: string;
+  trip_id: string;
+  trip_name: string;
+  invited_at: string;
+}
+
 export interface Expense {
   id: string;
   trip_id: string;

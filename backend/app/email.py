@@ -19,14 +19,17 @@ def send_password_reset_email(to_email: str, reset_url: str) -> None:
     )
 
 
-def send_trip_invite_email(to_email: str, trip_name: str, register_url: str) -> None:
-    """"Send" an email inviting someone without an account yet to
-    register and join a trip. Same stand-in as
+def send_trip_invite_email(to_email: str, trip_name: str, action_url: str) -> None:
+    """"Send" an email inviting someone to join a trip — the invite is
+    still pending until they explicitly accept it. `action_url` is a
+    registration link if they don't have an account yet, or just the
+    app's login page if they do (accepting/declining happens from
+    their pending-invitations list once logged in). Same stand-in as
     send_password_reset_email — logged, not actually emailed.
     """
     logger.info(
-        "Trip invite: %s was invited to join '%s' — register link: %s",
+        "Trip invite: %s was invited to join '%s' — continue here: %s",
         to_email,
         trip_name,
-        register_url,
+        action_url,
     )

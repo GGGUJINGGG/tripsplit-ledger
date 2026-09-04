@@ -98,6 +98,13 @@ class ParticipantRead(BaseModel):
     role: MemberRole
 
 
+class PendingInvitation(BaseModel):
+    id: UUID
+    trip_id: UUID
+    trip_name: str
+    invited_at: datetime
+
+
 class TripRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
