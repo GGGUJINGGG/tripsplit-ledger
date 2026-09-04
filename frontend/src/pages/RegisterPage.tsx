@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 import {
@@ -11,9 +11,11 @@ import {
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const invitedEmail = searchParams.get("email") ?? "";
 
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,9 @@ export default function RegisterPage() {
           <p className="eyebrow">TripSplit Ledger</p>
           <h1>Create account</h1>
           <p className="muted">
-            Register to create and manage shared trips.
+            {invitedEmail
+              ? "You've been invited to a trip — create your account to join."
+              : "Register to create and manage shared trips."}
           </p>
         </div>
 

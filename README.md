@@ -21,7 +21,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 **Trip management**
 - Create trips with date ranges
 - Per-trip dashboard showing total spending, shared spending, and personal spending at a glance
-- Invite another registered user to a trip by email (owner-only)
+- Invite anyone to a trip by email (owner-only) — if they don't have an account yet, they get a registration link and are added automatically the moment they sign up, no separate "accept" step
 - Trip renaming and deletion, owner-only and enforced by the API
 
 **Expenses**
@@ -52,7 +52,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 - **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
 - **No frontend UI for inviting members beyond the invite-by-email form** — the API also enforces owner-only rules here, but there's no bulk invite or member-management screen beyond that one form.
 - **Expense Ledger pagination is client-side** — `GET /trips/{id}/expenses` supports real `limit`/`offset` query params, but the frontend still loads a trip's full expense list in one request (it's embedded in `GET /trips/{id}`, which the dashboard and CSV export also depend on) and paginates 25 rows at a time in the browser. That keeps the table usable at moderate scale but doesn't reduce what's transferred over the network — a trip with tens of thousands of expenses would need the frontend to fetch pages from the paginated endpoint directly instead.
-- **Password reset emails aren't actually emailed** — no transactional email provider (SES, Resend, SendGrid, ...) is configured, so `POST /auth/forgot-password` logs the reset link server-side instead of sending it. The rest of the flow (single-use, hashed, time-limited tokens; forced logout of other sessions on reset) is real and tested; only the delivery mechanism is a stand-in.
+- **Password reset and trip invite emails aren't actually emailed** — no transactional email provider (SES, Resend, SendGrid, ...) is configured, so `POST /auth/forgot-password` and inviting an unregistered email both log the link server-side instead of sending it. The rest of each flow (single-use, hashed, time-limited reset tokens; automatic trip-membership claiming on registration) is real and tested; only the delivery mechanism is a stand-in.
 - **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
 - **Error monitoring (Sentry) is wired up but not turned on** — the backend logs structured JSON for every request (method, path, status, duration) by default, but exception tracking via Sentry only activates if `SENTRY_DSN` is set (see `backend/.env.example`); no Sentry project is configured for this deployment.
 
@@ -120,6 +120,7 @@ erDiagram
         uuid trip_id FK
         uuid user_id FK "nullable, SET NULL on user delete"
         string display_name
+        string invited_email "nullable, set for a pending email invite"
         enum role "owner | member"
     }
     EXPENSES {
@@ -142,7 +143,7 @@ erDiagram
     }
 ```
 
-`trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `expenses.amount_cents` and `expense_shares.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill; see [Calculation Logic](#calculation-logic).
+`trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `invited_email` is set on the same nullable-`user_id` row when that guest was invited by email rather than added by name: registering with a matching email claims every such row across every trip at once (see `register_user()` in `app/routers/auth.py`), turning it into a normal membership. `expenses.amount_cents` and `expense_shares.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill; see [Calculation Logic](#calculation-logic).
 
 ## Backend Setup
 

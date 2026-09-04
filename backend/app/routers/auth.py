@@ -8,7 +8,7 @@ from app.auth_dependencies import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.email import send_password_reset_email
-from app.orm_models import PasswordResetToken, RefreshToken, User
+from app.orm_models import PasswordResetToken, RefreshToken, TripMember, User
 from app.rate_limit import enforce_rate_limit
 from app.schemas import (
     ForgotPasswordRequest,
@@ -93,7 +93,29 @@ def register_user(
     db.commit()
     db.refresh(user)
 
+    _claim_pending_trip_invitations(db, user)
+
     return user
+
+
+def _claim_pending_trip_invitations(db: Session, user: User) -> None:
+    """A trip owner can invite someone by email before they have an
+    account (see participants.invite_member) — this links every such
+    pending placeholder membership to the account the moment someone
+    registers with that same email, across every trip they were
+    invited to.
+    """
+    pending_invitations = db.scalars(
+        select(TripMember).where(
+            TripMember.invited_email == user.email,
+            TripMember.user_id.is_(None),
+        )
+    )
+    for member in pending_invitations:
+        member.user_id = user.id
+        member.display_name = user.display_name
+        db.add(member)
+    db.commit()
 
 @router.post(
     "/login",

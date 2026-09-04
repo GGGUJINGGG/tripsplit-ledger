@@ -206,15 +206,59 @@ class ParticipantRouteTests(AuthenticatedDatabaseTestCase):
         )
         self.assertEqual(invitee_view.status_code, 200)
 
-    def test_invite_rejects_unknown_email(self) -> None:
+    def test_invite_of_unregistered_email_creates_pending_placeholder(self) -> None:
         trip = self.create_trip()
 
         response = self.client.post(
             f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "Nobody@Example.com"},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertIsNone(body["user_id"])
+        self.assertEqual(body["name"], "nobody@example.com")
+        self.assertEqual(body["role"], "member")
+
+        participants = self.client.get(
+            f"/api/trips/{trip['id']}/participants"
+        ).json()
+        self.assertIn(
+            "nobody@example.com", [p["name"] for p in participants]
+        )
+
+    def test_invite_of_unregistered_email_rejects_duplicate_invite(self) -> None:
+        trip = self.create_trip()
+
+        first = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "nobody@example.com"},
+        )
+        self.assertEqual(first.status_code, 201)
+
+        second = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "nobody@example.com"},
+        )
+        self.assertEqual(second.status_code, 409)
+
+    def test_non_owner_cannot_invite_unregistered_email(self) -> None:
+        trip = self.create_trip()
+        member_headers = self.register_and_login(
+            "member@example.com", "Member"
+        )
+        self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            json={"email": "member@example.com"},
+        )
+
+        response = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            headers=member_headers,
             json={"email": "nobody@example.com"},
         )
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 403)
 
     def test_invite_rejects_existing_member(self) -> None:
         trip = self.create_trip()

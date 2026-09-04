@@ -343,3 +343,134 @@ class AuthRouteTests(DatabaseTestCase):
         )
 
         self.assertEqual(response.status_code, 204)
+
+    def _register_login_and_create_trip(
+        self, email: str, display_name: str, trip_name: str
+    ) -> tuple[dict, dict]:
+        self.client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "secure-password-123",
+                "display_name": display_name,
+            },
+        )
+        login = self.client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "secure-password-123"},
+        )
+        headers = {
+            "Authorization": f"Bearer {login.json()['access_token']}"
+        }
+        trip = self.client.post(
+            "/api/trips",
+            headers=headers,
+            json={"name": trip_name, "start_date": "2026-07-01"},
+        ).json()
+        return headers, trip
+
+    def test_register_claims_a_pending_trip_invitation(self) -> None:
+        owner_headers, trip = self._register_login_and_create_trip(
+            "owner@example.com", "Owner", "Owner's Trip"
+        )
+        invite_response = self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            headers=owner_headers,
+            json={"email": "invitee@example.com"},
+        )
+        self.assertEqual(invite_response.status_code, 201)
+        placeholder_id = invite_response.json()["id"]
+
+        register_response = self.client.post(
+            "/api/auth/register",
+            json={
+                "email": "invitee@example.com",
+                "password": "secure-password-123",
+                "display_name": "Invitee Person",
+            },
+        )
+        self.assertEqual(register_response.status_code, 201)
+        new_user_id = register_response.json()["id"]
+
+        participants = self.client.get(
+            f"/api/trips/{trip['id']}/participants",
+            headers=owner_headers,
+        ).json()
+        claimed = next(p for p in participants if p["id"] == placeholder_id)
+        self.assertEqual(claimed["user_id"], new_user_id)
+        self.assertEqual(claimed["name"], "Invitee Person")
+        self.assertEqual(claimed["role"], "member")
+
+    def test_register_claims_invitations_across_multiple_trips(self) -> None:
+        owner_headers, trip_one = self._register_login_and_create_trip(
+            "owner-multi@example.com", "Owner", "Trip One"
+        )
+        owner_two_headers, trip_two = self._register_login_and_create_trip(
+            "owner-multi-2@example.com", "Owner Two", "Trip Two"
+        )
+
+        self.client.post(
+            f"/api/trips/{trip_one['id']}/participants/invite",
+            headers=owner_headers,
+            json={"email": "double-invitee@example.com"},
+        )
+        self.client.post(
+            f"/api/trips/{trip_two['id']}/participants/invite",
+            headers=owner_two_headers,
+            json={"email": "double-invitee@example.com"},
+        )
+
+        self.client.post(
+            "/api/auth/register",
+            json={
+                "email": "double-invitee@example.com",
+                "password": "secure-password-123",
+                "display_name": "Double Invitee",
+            },
+        )
+
+        trip_one_participants = self.client.get(
+            f"/api/trips/{trip_one['id']}/participants",
+            headers=owner_headers,
+        ).json()
+        trip_two_participants = self.client.get(
+            f"/api/trips/{trip_two['id']}/participants",
+            headers=owner_two_headers,
+        ).json()
+
+        self.assertIn(
+            "Double Invitee",
+            [p["name"] for p in trip_one_participants],
+        )
+        self.assertIn(
+            "Double Invitee",
+            [p["name"] for p in trip_two_participants],
+        )
+
+    def test_register_does_not_claim_unrelated_invitations(self) -> None:
+        owner_headers, trip = self._register_login_and_create_trip(
+            "owner-unrelated@example.com", "Owner", "Unrelated Trip"
+        )
+        self.client.post(
+            f"/api/trips/{trip['id']}/participants/invite",
+            headers=owner_headers,
+            json={"email": "someone-else@example.com"},
+        )
+
+        self.client.post(
+            "/api/auth/register",
+            json={
+                "email": "not-invited@example.com",
+                "password": "secure-password-123",
+                "display_name": "Not Invited",
+            },
+        )
+
+        participants = self.client.get(
+            f"/api/trips/{trip['id']}/participants",
+            headers=owner_headers,
+        ).json()
+        pending = next(
+            p for p in participants if p["name"] == "someone-else@example.com"
+        )
+        self.assertIsNone(pending["user_id"])

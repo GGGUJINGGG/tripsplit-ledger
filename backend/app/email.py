@@ -17,3 +17,16 @@ def send_password_reset_email(to_email: str, reset_url: str) -> None:
         to_email,
         reset_url,
     )
+
+
+def send_trip_invite_email(to_email: str, trip_name: str, register_url: str) -> None:
+    """"Send" an email inviting someone without an account yet to
+    register and join a trip. Same stand-in as
+    send_password_reset_email — logged, not actually emailed.
+    """
+    logger.info(
+        "Trip invite: %s was invited to join '%s' — register link: %s",
+        to_email,
+        trip_name,
+        register_url,
+    )

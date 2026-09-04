@@ -1,11 +1,14 @@
 from datetime import UTC, datetime
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
+from app.email import send_trip_invite_email
 from app.orm_models import (
     Expense,
     ExpenseShare,
@@ -101,28 +104,55 @@ def invite_member(
     invited_user = db.scalar(
         select(User).where(User.email == normalized_email)
     )
-    if invited_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No user found with that email",
-        )
 
-    existing_membership = db.scalar(
+    if invited_user is not None:
+        existing_membership = db.scalar(
+            select(TripMember).where(
+                TripMember.trip_id == trip_id,
+                TripMember.user_id == invited_user.id,
+            )
+        )
+        if existing_membership is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is already a member of this trip",
+            )
+
+        member = TripMember(
+            trip_id=trip.id,
+            user_id=invited_user.id,
+            display_name=invited_user.display_name,
+            role=MemberRole.MEMBER,
+        )
+        trip.updated_at = datetime.now(UTC)
+
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+        return member
+
+    # No account exists for this email yet. Add a placeholder member —
+    # visible in the trip right away — that gets automatically claimed
+    # the moment someone registers with this address (see
+    # register_user() in app/routers/auth.py), and email them a link
+    # to register.
+    existing_invite = db.scalar(
         select(TripMember).where(
             TripMember.trip_id == trip_id,
-            TripMember.user_id == invited_user.id,
+            TripMember.invited_email == normalized_email,
+            TripMember.user_id.is_(None),
         )
     )
-    if existing_membership is not None:
+    if existing_invite is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="User is already a member of this trip",
+            detail="This email has already been invited to this trip",
         )
 
     member = TripMember(
         trip_id=trip.id,
-        user_id=invited_user.id,
-        display_name=invited_user.display_name,
+        display_name=normalized_email,
+        invited_email=normalized_email,
         role=MemberRole.MEMBER,
     )
     trip.updated_at = datetime.now(UTC)
@@ -130,6 +160,13 @@ def invite_member(
     db.add(member)
     db.commit()
     db.refresh(member)
+
+    register_url = (
+        f"{settings.frontend_base_url.rstrip('/')}"
+        f"/register?email={quote(normalized_email)}"
+    )
+    send_trip_invite_email(normalized_email, trip.name, register_url)
+
     return member
 
 

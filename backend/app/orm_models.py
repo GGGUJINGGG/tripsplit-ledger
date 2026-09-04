@@ -195,6 +195,15 @@ class TripMember(TimestampMixin, Base):
         String(100),
         nullable=False,
     )
+    # Set only for a member invited by email who hasn't registered yet
+    # (user_id is null until then). Registering with a matching email
+    # auto-claims every such placeholder membership — see
+    # app/routers/auth.py's register_user.
+    invited_email: Mapped[str | None] = mapped_column(
+        String(320),
+        nullable=True,
+        index=True,
+    )
     role: Mapped[MemberRole] = mapped_column(
         Enum(
             MemberRole,

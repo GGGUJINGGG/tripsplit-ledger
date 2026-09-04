@@ -98,8 +98,9 @@ export default function ParticipantsPanel({
 
       <div className="panel-subsection">
         <p className="field-hint">
-          Invite someone who already has a TripSplit account. Only the trip owner
-          can invite new members.
+          Invite anyone by email — if they don't have a TripSplit account
+          yet, they'll get a link to register and be added automatically.
+          Only the trip owner can invite new members.
         </p>
         <form className="inline-form" onSubmit={handleInvite}>
           <label htmlFor="invite-email" className="sr-only">
