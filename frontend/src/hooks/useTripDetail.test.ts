@@ -161,4 +161,59 @@ describe("useTripDetail", () => {
       expect(item.netBalances).toEqual([]);
     }
   });
+
+  it("still refreshes trip and dashboard when /settlements 409s on a mixed-currency trip", async () => {
+    const trip = buildTrip({
+      expenses: [
+        {
+          id: "e1",
+          trip_id: "trip-1",
+          title: "Hotel",
+          amount: 100,
+          paid_by: "p1",
+          split_among: ["p1", "p2"],
+          expense_type: "shared",
+          category: "hotel",
+          date: "2026-07-01",
+          currency: "USD",
+          note: null,
+          created_at: "2026-07-01T00:00:00Z",
+          updated_at: "2026-07-01T00:00:00Z",
+        },
+        {
+          id: "e2",
+          trip_id: "trip-1",
+          title: "Parking",
+          amount: 20,
+          paid_by: "p2",
+          split_among: ["p1", "p2"],
+          expense_type: "shared",
+          category: "transportation",
+          date: "2026-07-01",
+          currency: "CNY",
+          note: null,
+          created_at: "2026-07-01T00:00:00Z",
+          updated_at: "2026-07-01T00:00:00Z",
+        },
+      ],
+    });
+    vi.mocked(getTrip).mockResolvedValue(trip);
+    // The real backend returns 409 here for mixed-currency trips.
+    vi.mocked(getSettlements).mockRejectedValue(
+      new Error("Trip has shared expenses in multiple currencies; cannot generate settlements"),
+    );
+    vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+
+    const { result } = renderHook(() => useTripDetail("trip-1"));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // The 409 from /settlements must not prevent trip/dashboard from loading.
+    expect(result.current.trip).toEqual(trip);
+    expect(result.current.error).toBeNull();
+    expect(result.current.settlements).toEqual([]);
+    expect(
+      result.current.spendingByCurrency.find((item) => item.currency === "CNY")?.amount,
+    ).toBe(20);
+  });
 });

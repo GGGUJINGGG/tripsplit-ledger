@@ -36,14 +36,24 @@ export function useTripDetail(tripId: string | undefined) {
     }
     setError(null);
     try {
-      const [nextTrip, settlementSummary, dashboardSummary] = await Promise.all([
+      const [nextTrip, dashboardSummary] = await Promise.all([
         getTrip(tripId),
-        getSettlements(tripId),
         getDashboard(tripId),
       ]);
       setTrip(nextTrip);
-      setSettlements(settlementSummary.settlements);
       setDashboard(dashboardSummary);
+
+      // Fetched separately: mixed-currency trips make this endpoint 409 by
+      // design (settlementCurrency below already drives the "hidden for
+      // mixed currency" messaging), so it must not abort the trip/dashboard
+      // refresh above.
+      try {
+        const settlementSummary = await getSettlements(tripId);
+        setSettlements(settlementSummary.settlements);
+      } catch {
+        setSettlements([]);
+      }
+
       return nextTrip;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load trip");

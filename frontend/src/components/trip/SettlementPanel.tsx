@@ -22,13 +22,13 @@ export default function SettlementPanel({
           View full page
         </Link>
       </div>
-      {settlements.length === 0 ? (
-        <p className="empty-state">Everyone is settled.</p>
-      ) : settlementCurrency === null ? (
+      {settlementCurrency === null ? (
         <p className="empty-state">
           Settlements are hidden for mixed-currency trips until exchange-rate
           conversion is supported.
         </p>
+      ) : settlements.length === 0 ? (
+        <p className="empty-state">Everyone is settled.</p>
       ) : (
         <div className="settlement-list">
           {settlements.map((settlement) => (
