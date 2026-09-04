@@ -139,15 +139,6 @@ export default function TripDetailPage() {
         onRecordPayment={recordPayment}
       />
 
-      <PaymentsPanel
-        participants={trip.participants}
-        payments={trip.payments}
-        participantNames={participantNames}
-        isSaving={isSaving}
-        onRecordPayment={recordPayment}
-        onRemovePayment={removePayment}
-      />
-
       <div className="content-grid two-columns">
         <ParticipantsPanel
           participants={trip.participants}
@@ -167,6 +158,15 @@ export default function TripDetailPage() {
           />
         </div>
       </div>
+
+      <PaymentsPanel
+        participants={trip.participants}
+        payments={trip.payments}
+        participantNames={participantNames}
+        isSaving={isSaving}
+        onRecordPayment={recordPayment}
+        onRemovePayment={removePayment}
+      />
 
       <CategoryBreakdown categorySummary={categorySummary} />
 
