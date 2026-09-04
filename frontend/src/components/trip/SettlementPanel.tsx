@@ -1,14 +1,22 @@
+import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { Settlement } from "../../types";
+import type { PaymentCreate, Settlement } from "../../types";
 import { formatMoney } from "../../utils/currency";
 
 interface SettlementPanelProps {
   tripId: string;
   settlements: Settlement[];
+  isSaving: boolean;
+  onRecordPayment: (payload: PaymentCreate) => Promise<boolean>;
 }
 
-export default function SettlementPanel({ tripId, settlements }: SettlementPanelProps) {
+export default function SettlementPanel({
+  tripId,
+  settlements,
+  isSaving,
+  onRecordPayment,
+}: SettlementPanelProps) {
   const settlementsByCurrency = new Map<string, Settlement[]>();
   for (const settlement of settlements) {
     const group = settlementsByCurrency.get(settlement.currency) ?? [];
@@ -16,6 +24,16 @@ export default function SettlementPanel({ tripId, settlements }: SettlementPanel
     settlementsByCurrency.set(settlement.currency, group);
   }
   const currencyGroups = Array.from(settlementsByCurrency.entries());
+
+  function handleMarkPaid(settlement: Settlement) {
+    void onRecordPayment({
+      from_participant: settlement.from_participant_id,
+      to_participant: settlement.to_participant_id,
+      amount: settlement.amount,
+      currency: settlement.currency,
+      date: new Date().toISOString().slice(0, 10),
+    });
+  }
 
   return (
     <section className="panel">
@@ -44,7 +62,19 @@ export default function SettlementPanel({ tripId, settlements }: SettlementPanel
                       <strong>{settlement.from_name}</strong> pays{" "}
                       <strong>{settlement.to_name}</strong>
                     </span>
-                    <strong>{formatMoney(settlement.currency, settlement.amount)}</strong>
+                    <div className="settlement-row-actions">
+                      <strong>{formatMoney(settlement.currency, settlement.amount)}</strong>
+                      <button
+                        className="table-action-button"
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => handleMarkPaid(settlement)}
+                        title="Record this as paid today"
+                      >
+                        <Check size={16} />
+                        Mark as paid
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -117,6 +117,7 @@ class TripRead(BaseModel):
         validation_alias="members",
     )
     expenses: list[ExpenseRead] = Field(default_factory=list)
+    payments: list[PaymentRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -183,6 +184,41 @@ class ExpensePage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PaymentCreate(BaseModel):
+    from_participant: UUID
+    to_participant: UUID
+    amount: float = Field(gt=0)
+    date: DataType
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    note: Optional[str] = None
+
+    _validate_currency = field_validator("currency")(
+        _validate_currency_code
+    )
+
+    @model_validator(mode="after")
+    def from_and_to_must_differ(self) -> "PaymentCreate":
+        if self.from_participant == self.to_participant:
+            raise ValueError(
+                "from_participant and to_participant must be different people"
+            )
+        return self
+
+
+class PaymentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    trip_id: UUID
+    from_participant: UUID = Field(validation_alias="from_member_id")
+    to_participant: UUID = Field(validation_alias="to_member_id")
+    amount: float
+    currency: str
+    date: DataType
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
 
 
 class CategorySpending(BaseModel):

@@ -34,6 +34,7 @@ def get_settlements(
             selectinload(Trip.expenses).selectinload(
                 Expense.paid_by
             ),
+            selectinload(Trip.payments),
         )
         .where(
             Trip.id == trip_id,

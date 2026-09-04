@@ -1,0 +1,193 @@
+import { FormEvent, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+
+import type { Participant, Payment, PaymentCreate } from "../../types";
+import { type CurrencyCode, currencies, formatMoney } from "../../utils/currency";
+
+interface PaymentsPanelProps {
+  participants: Participant[];
+  payments: Payment[];
+  participantNames: Map<string, string>;
+  isSaving: boolean;
+  onRecordPayment: (payload: PaymentCreate) => Promise<boolean>;
+  onRemovePayment: (paymentId: string) => Promise<boolean>;
+}
+
+export default function PaymentsPanel({
+  participants,
+  payments,
+  participantNames,
+  isSaving,
+  onRecordPayment,
+  onRemovePayment,
+}: PaymentsPanelProps) {
+  const [fromParticipant, setFromParticipant] = useState("");
+  const [toParticipant, setToParticipant] = useState("");
+  const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function resetFields() {
+    setFromParticipant("");
+    setToParticipant("");
+    setAmount("");
+    setCurrency("USD");
+    setDate("");
+    setNote("");
+    setFormError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const parsedAmount = Number(amount);
+    if (!fromParticipant || !toParticipant) {
+      setFormError("Choose who paid and who received it.");
+      return;
+    }
+    if (fromParticipant === toParticipant) {
+      setFormError("These must be two different people.");
+      return;
+    }
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setFormError("Amount must be greater than 0.");
+      return;
+    }
+
+    setFormError(null);
+    const succeeded = await onRecordPayment({
+      from_participant: fromParticipant,
+      to_participant: toParticipant,
+      amount: parsedAmount,
+      currency,
+      date: date || new Date().toISOString().slice(0, 10),
+      note: note.trim() || undefined,
+    });
+
+    if (succeeded) {
+      resetFields();
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-heading">
+        <h2>Record a Payment</h2>
+      </div>
+      {formError ? <div className="alert">{formError}</div> : null}
+      <form className="form-grid compact" onSubmit={handleSubmit}>
+        <label htmlFor="payment-from">
+          Paid by
+          <select
+            id="payment-from"
+            value={fromParticipant}
+            onChange={(event) => setFromParticipant(event.target.value)}
+          >
+            <option value="">Select person</option>
+            {participants.map((participant) => (
+              <option key={participant.id} value={participant.id}>
+                {participant.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="payment-to">
+          Paid to
+          <select
+            id="payment-to"
+            value={toParticipant}
+            onChange={(event) => setToParticipant(event.target.value)}
+          >
+            <option value="">Select person</option>
+            {participants.map((participant) => (
+              <option key={participant.id} value={participant.id}>
+                {participant.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="payment-amount">
+          Amount
+          <input
+            id="payment-amount"
+            type="number"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="50.00"
+          />
+        </label>
+        <label htmlFor="payment-currency">
+          Currency
+          <select
+            id="payment-currency"
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value as CurrencyCode)}
+          >
+            {currencies.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="payment-date">
+          Date
+          <input
+            id="payment-date"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+          />
+        </label>
+        <label className="wide-field" htmlFor="payment-note">
+          Note
+          <input
+            id="payment-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Optional"
+          />
+        </label>
+        <div className="form-actions wide-field">
+          <button className="primary-button" type="submit" disabled={isSaving}>
+            <Plus size={18} />
+            Record payment
+          </button>
+        </div>
+      </form>
+
+      {payments.length > 0 ? (
+        <div className="settlement-list payment-history">
+          {payments.map((payment) => (
+            <div className="settlement-row" key={payment.id}>
+              <span>
+                <strong>{participantNames.get(payment.from_participant) ?? "Unknown"}</strong>{" "}
+                paid{" "}
+                <strong>{participantNames.get(payment.to_participant) ?? "Unknown"}</strong>
+                {payment.note ? <span className="cell-note"> — {payment.note}</span> : null}
+                <span className="cell-note"> · {payment.date}</span>
+              </span>
+              <div className="settlement-row-actions">
+                <strong>{formatMoney(payment.currency, payment.amount)}</strong>
+                <button
+                  className="table-action-button danger"
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void onRemovePayment(payment.id)}
+                  aria-label="Undo this payment"
+                  title="Undo this payment"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}

@@ -162,6 +162,10 @@ class Trip(TimestampMixin, Base):
         back_populates="trip",
         cascade="all, delete-orphan",
     )
+    payments: Mapped[list[Payment]] = relationship(
+        back_populates="trip",
+        cascade="all, delete-orphan",
+    )
 
 
 class TripMember(TimestampMixin, Base):
@@ -351,6 +355,86 @@ class Expense(TimestampMixin, Base):
     @property
     def date(self) -> date:
         return self.expense_date
+
+class Payment(TimestampMixin, Base):
+    """An actual transfer of money between two trip members, recorded to
+    settle up part or all of what expense-splitting says they owe each
+    other. Kept separate from Expense: a payment isn't spending, it just
+    moves an existing debt, so it's netted into balances rather than
+    counted toward any spending total."""
+
+    __tablename__ = "payments"
+    __table_args__ = (
+        CheckConstraint(
+            "amount_cents > 0",
+            name="ck_payments_amount_cents_positive",
+        ),
+        CheckConstraint(
+            "from_member_id != to_member_id",
+            name="ck_payments_from_ne_to",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    trip_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("trips.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    from_member_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("trip_members.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    to_member_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("trip_members.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    amount_cents: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        default="USD",
+        nullable=False,
+    )
+    payment_date: Mapped[date] = mapped_column(
+        "date",
+        Date,
+        nullable=False,
+    )
+    note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    trip: Mapped[Trip] = relationship(
+        back_populates="payments",
+    )
+    from_member: Mapped[TripMember] = relationship(
+        foreign_keys=[from_member_id],
+    )
+    to_member: Mapped[TripMember] = relationship(
+        foreign_keys=[to_member_id],
+    )
+
+    @property
+    def amount(self) -> float:
+        return round(self.amount_cents / 100, 2)
+
+    @property
+    def date(self) -> date:
+        return self.payment_date
+
 
 class ExpenseShare(TimestampMixin, Base):
     __tablename__ = "expense_shares"

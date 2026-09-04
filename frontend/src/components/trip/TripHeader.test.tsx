@@ -17,6 +17,7 @@ const trip: Trip = {
     { id: "p2", name: "Maya", user_id: "user-maya", role: "member" },
   ],
   expenses: [],
+  payments: [],
   created_at: "2026-07-01T00:00:00Z",
   updated_at: "2026-07-01T00:00:00Z",
 };

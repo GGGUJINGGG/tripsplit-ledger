@@ -17,6 +17,7 @@ def simplify_settlements(trip: Any) -> SettlementSummary:
             for expense in trip.expenses
             if is_shared_expense(expense)
         }
+        | {payment.currency for payment in getattr(trip, "payments", [])}
     )
 
     settlements: list[Settlement] = []

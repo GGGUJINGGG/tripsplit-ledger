@@ -113,6 +113,35 @@ class CalculationTests(unittest.TestCase):
             {"alex": 140, "maya": -40, "sam": -100},
         )
 
+    def test_dashboard_net_balances_reflect_recorded_payments(self) -> None:
+        # Paying down a debt changes who owes whom (net_balances) but not
+        # how much of the trip's shared costs each person is responsible
+        # for (owed_by_person) or what they fronted (paid_by_person).
+        self.trip.payments = [
+            SimpleNamespace(
+                id="payment-1",
+                from_member_id="sam",
+                to_member_id="alex",
+                amount=100,
+                currency="USD",
+            ),
+        ]
+
+        dashboard = build_dashboard_summary(self.trip)
+
+        self.assertEqual(
+            {item.participant_id: item.amount for item in dashboard.paid_by_person},
+            {"alex": 300, "maya": 210, "sam": 60},
+        )
+        self.assertEqual(
+            {item.participant_id: item.amount for item in dashboard.owed_by_person},
+            {"alex": 160, "maya": 130, "sam": 160},
+        )
+        self.assertEqual(
+            {item.participant_id: item.balance for item in dashboard.net_balances},
+            {"alex": 40, "maya": -40, "sam": 0},
+        )
+
     def test_simplified_settlements(self) -> None:
         settlement_summary = simplify_settlements(self.trip)
 
@@ -148,6 +177,91 @@ class CalculationTests(unittest.TestCase):
             ],
             [
                 ("alex", "maya", 30, "EUR"),
+                ("sam", "maya", 30, "EUR"),
+                ("maya", "alex", 100, "USD"),
+                ("sam", "alex", 70, "USD"),
+            ],
+        )
+
+    def test_recorded_payment_reduces_the_settlement_it_pays_toward(self) -> None:
+        # Before any payment, sam owes alex 100 and maya owes alex 40.
+        self.trip.payments = [
+            SimpleNamespace(
+                id="payment-1",
+                from_member_id="sam",
+                to_member_id="alex",
+                amount=60,
+                currency="USD",
+            ),
+        ]
+
+        settlement_summary = simplify_settlements(self.trip)
+
+        self.assertEqual(
+            [
+                (
+                    settlement.from_participant_id,
+                    settlement.to_participant_id,
+                    settlement.amount,
+                    settlement.currency,
+                )
+                for settlement in settlement_summary.settlements
+            ],
+            [("maya", "alex", 40, "USD"), ("sam", "alex", 40, "USD")],
+        )
+
+    def test_paying_off_a_debt_exactly_removes_it_from_settlements(self) -> None:
+        self.trip.payments = [
+            SimpleNamespace(
+                id="payment-1",
+                from_member_id="sam",
+                to_member_id="alex",
+                amount=100,
+                currency="USD",
+            ),
+        ]
+
+        settlement_summary = simplify_settlements(self.trip)
+
+        self.assertEqual(
+            [
+                (
+                    settlement.from_participant_id,
+                    settlement.to_participant_id,
+                    settlement.amount,
+                )
+                for settlement in settlement_summary.settlements
+            ],
+            [("maya", "alex", 40)],
+        )
+
+    def test_a_payment_in_one_currency_does_not_affect_another(self) -> None:
+        self.trip.expenses[1].currency = "EUR"
+        self.trip.payments = [
+            SimpleNamespace(
+                id="payment-1",
+                from_member_id="alex",
+                to_member_id="maya",
+                amount=30,
+                currency="EUR",
+            ),
+        ]
+
+        settlement_summary = simplify_settlements(self.trip)
+
+        self.assertEqual(
+            [
+                (
+                    settlement.from_participant_id,
+                    settlement.to_participant_id,
+                    settlement.amount,
+                    settlement.currency,
+                )
+                for settlement in settlement_summary.settlements
+            ],
+            [
+                # alex's EUR debt to maya is fully paid off, leaving only
+                # sam's EUR debt and the untouched USD settlements.
                 ("sam", "maya", 30, "EUR"),
                 ("maya", "alex", 100, "USD"),
                 ("sam", "alex", 70, "USD"),

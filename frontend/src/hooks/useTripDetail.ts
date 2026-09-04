@@ -7,6 +7,7 @@ import {
   deleteParticipant,
   inviteParticipant,
 } from "../api/participants";
+import { createPayment, deletePayment } from "../api/payments";
 import { getSettlements } from "../api/settlements";
 import { deleteTrip, getTrip, updateTrip } from "../api/trips";
 import type {
@@ -14,6 +15,7 @@ import type {
   Expense,
   ExpenseCreate,
   ExpenseUpdate,
+  PaymentCreate,
   Settlement,
   Trip,
   TripUpdate,
@@ -319,6 +321,40 @@ export function useTripDetail(tripId: string | undefined) {
     }
   }
 
+  async function recordPayment(payload: PaymentCreate): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await createPayment(tripId, payload);
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to record payment");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function removePayment(paymentId: string): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await deletePayment(tripId, paymentId);
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to remove payment");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return {
     trip,
     settlements,
@@ -338,6 +374,8 @@ export function useTripDetail(tripId: string | undefined) {
     removeParticipant,
     saveExpense,
     removeExpense,
+    recordPayment,
+    removePayment,
     renameTrip,
     removeTrip,
   };

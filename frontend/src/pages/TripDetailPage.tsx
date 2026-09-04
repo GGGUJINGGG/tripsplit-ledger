@@ -7,6 +7,7 @@ import ExpenseForm from "../components/trip/ExpenseForm";
 import ExpenseTable from "../components/trip/ExpenseTable";
 import ParticipantsPanel from "../components/trip/ParticipantsPanel";
 import ParticipantSummary from "../components/trip/ParticipantSummary";
+import PaymentsPanel from "../components/trip/PaymentsPanel";
 import SettlementPanel from "../components/trip/SettlementPanel";
 import TripHeader from "../components/trip/TripHeader";
 import { useAuth } from "../auth/AuthContext";
@@ -37,6 +38,8 @@ export default function TripDetailPage() {
     removeParticipant,
     saveExpense,
     removeExpense,
+    recordPayment,
+    removePayment,
     renameTrip,
     removeTrip,
   } = useTripDetail(tripId);
@@ -129,7 +132,21 @@ export default function TripDetailPage() {
         settlementCurrency={settlementCurrency}
       />
 
-      <SettlementPanel tripId={trip.id} settlements={settlements} />
+      <SettlementPanel
+        tripId={trip.id}
+        settlements={settlements}
+        isSaving={isSaving}
+        onRecordPayment={recordPayment}
+      />
+
+      <PaymentsPanel
+        participants={trip.participants}
+        payments={trip.payments}
+        participantNames={participantNames}
+        isSaving={isSaving}
+        onRecordPayment={recordPayment}
+        onRemovePayment={removePayment}
+      />
 
       <div className="content-grid two-columns">
         <ParticipantsPanel

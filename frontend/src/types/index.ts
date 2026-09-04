@@ -41,6 +41,28 @@ export interface Expense {
   updated_at: string;
 }
 
+export interface Payment {
+  id: string;
+  trip_id: string;
+  from_participant: string;
+  to_participant: string;
+  amount: number;
+  currency: string;
+  date: string;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentCreate {
+  from_participant: string;
+  to_participant: string;
+  amount: number;
+  date: string;
+  currency?: string;
+  note?: string;
+}
+
 export interface Trip {
   id: string;
   name: string;
@@ -48,6 +70,7 @@ export interface Trip {
   end_date?: string | null;
   participants: Participant[];
   expenses: Expense[];
+  payments: Payment[];
   created_at: string;
   updated_at: string;
 }

@@ -11,6 +11,7 @@ from app.routers import (
     expenses,
     invitations,
     participants,
+    payments,
     settlements,
     trips,
 )
@@ -34,6 +35,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(trips.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
+app.include_router(payments.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(settlements.router, prefix="/api")
 app.include_router(invitations.router, prefix="/api")

@@ -3,7 +3,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -13,6 +13,7 @@ from app.orm_models import (
     Expense,
     ExpenseShare,
     MemberRole,
+    Payment,
     TripMember,
     User,
 )
@@ -204,6 +205,22 @@ def delete_participant(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Participant is included in one or more expense splits",
+        )
+
+    payment_id = db.scalar(
+        select(Payment.id)
+        .where(
+            or_(
+                Payment.from_member_id == participant_id,
+                Payment.to_member_id == participant_id,
+            )
+        )
+        .limit(1)
+    )
+    if payment_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Participant has one or more recorded payments",
         )
 
     trip.updated_at = datetime.now(UTC)

@@ -58,12 +58,20 @@ def is_expense_visible(expense: Any, current_user_id: Any) -> bool:
 class VisibleExpensesView:
     """Duck-typed stand-in for a Trip whose .expenses have already been
     filtered to what the current user is allowed to see. Everything in
-    this module only reads .members/.participants and .expenses off
-    whatever trip-like object it's given."""
+    this module only reads .members/.participants, .expenses, and
+    .payments off whatever trip-like object it's given. Payments carry
+    no personal/shared distinction (unlike expenses) and are always
+    visible to the whole trip, so they pass through unfiltered."""
 
-    def __init__(self, members: list[Any], expenses: list[Any]) -> None:
+    def __init__(
+        self,
+        members: list[Any],
+        expenses: list[Any],
+        payments: list[Any] | None = None,
+    ) -> None:
         self.members = members
         self.expenses = expenses
+        self.payments = payments or []
 
 
 def filter_visible_expenses(trip: Any, current_user_id: Any) -> VisibleExpensesView:
@@ -74,6 +82,7 @@ def filter_visible_expenses(trip: Any, current_user_id: Any) -> VisibleExpensesV
             for expense in trip.expenses
             if is_expense_visible(expense, current_user_id)
         ],
+        payments=list(getattr(trip, "payments", [])),
     )
 
 
@@ -152,6 +161,36 @@ def owed_by_person_cents(
     return owed_totals
 
 
+def payments_sent_cents(
+    trip: Any,
+    currency: str | None = None,
+) -> dict[Any, int]:
+    participants = get_participants(trip)
+    totals = {participant.id: 0 for participant in participants}
+
+    for payment in getattr(trip, "payments", []):
+        if currency is not None and payment.currency != currency:
+            continue
+        totals[payment.from_member_id] += amount_to_cents(payment.amount)
+
+    return totals
+
+
+def payments_received_cents(
+    trip: Any,
+    currency: str | None = None,
+) -> dict[Any, int]:
+    participants = get_participants(trip)
+    totals = {participant.id: 0 for participant in participants}
+
+    for payment in getattr(trip, "payments", []):
+        if currency is not None and payment.currency != currency:
+            continue
+        totals[payment.to_member_id] += amount_to_cents(payment.amount)
+
+    return totals
+
+
 def net_balances_cents(
     trip: Any,
     currency: str | None = None,
@@ -163,11 +202,21 @@ def net_balances_cents(
         currency=currency,
     )
     owed_totals = owed_by_person_cents(trip, currency=currency)
+    sent_totals = payments_sent_cents(trip, currency=currency)
+    received_totals = payments_received_cents(trip, currency=currency)
 
+    # A recorded payment doesn't change what anyone spent or owes from
+    # the trip's shared costs (paid_totals/owed_totals above) — it just
+    # moves money that settles part of an existing debt, so it nets
+    # directly into the balance: sending money brings a debtor's
+    # balance up toward zero, receiving it brings a creditor's balance
+    # down toward zero.
     return {
         participant.id: (
             paid_totals[participant.id]
             - owed_totals[participant.id]
+            + sent_totals[participant.id]
+            - received_totals[participant.id]
         )
         for participant in participants
     }

@@ -16,8 +16,13 @@ vi.mock("../api/expenses", () => ({
   updateExpense: vi.fn(),
   deleteExpense: vi.fn(),
 }));
+vi.mock("../api/payments", () => ({
+  createPayment: vi.fn(),
+  deletePayment: vi.fn(),
+}));
 
 import { getDashboard } from "../api/dashboard";
+import { createPayment, deletePayment } from "../api/payments";
 import { getSettlements } from "../api/settlements";
 import { getTrip } from "../api/trips";
 
@@ -48,6 +53,7 @@ function buildTrip(overrides: Partial<Trip> = {}): Trip {
         updated_at: "2026-07-01T00:00:00Z",
       },
     ],
+    payments: [],
     created_at: "2026-07-01T00:00:00Z",
     updated_at: "2026-07-01T00:00:00Z",
     ...overrides,
@@ -215,5 +221,64 @@ describe("useTripDetail", () => {
     expect(
       result.current.spendingByCurrency.find((item) => item.currency === "CNY")?.amount,
     ).toBe(20);
+  });
+
+  it("recordPayment creates the payment then refreshes the trip", async () => {
+    const trip = buildTrip();
+    vi.mocked(getTrip).mockResolvedValue(trip);
+    vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+    vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+    vi.mocked(createPayment).mockResolvedValue({
+      id: "payment-1",
+      trip_id: "trip-1",
+      from_participant: "p2",
+      to_participant: "p1",
+      amount: 50,
+      currency: "USD",
+      date: "2026-07-02",
+      note: null,
+      created_at: "2026-07-02T00:00:00Z",
+      updated_at: "2026-07-02T00:00:00Z",
+    });
+
+    const { result } = renderHook(() => useTripDetail("trip-1"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const succeeded = await result.current.recordPayment({
+      from_participant: "p2",
+      to_participant: "p1",
+      amount: 50,
+      currency: "USD",
+      date: "2026-07-02",
+    });
+
+    expect(succeeded).toBe(true);
+    expect(createPayment).toHaveBeenCalledWith("trip-1", {
+      from_participant: "p2",
+      to_participant: "p1",
+      amount: 50,
+      currency: "USD",
+      date: "2026-07-02",
+    });
+    // Recording a payment must refresh trip/dashboard data, same as saving
+    // an expense does.
+    expect(getTrip).toHaveBeenCalledTimes(2);
+  });
+
+  it("removePayment deletes the payment then refreshes the trip", async () => {
+    const trip = buildTrip();
+    vi.mocked(getTrip).mockResolvedValue(trip);
+    vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+    vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+    vi.mocked(deletePayment).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useTripDetail("trip-1"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const succeeded = await result.current.removePayment("payment-1");
+
+    expect(succeeded).toBe(true);
+    expect(deletePayment).toHaveBeenCalledWith("trip-1", "payment-1");
+    expect(getTrip).toHaveBeenCalledTimes(2);
   });
 });
