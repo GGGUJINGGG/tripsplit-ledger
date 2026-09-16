@@ -10,6 +10,7 @@ import ParticipantPaidChart from "../components/trip/ParticipantPaidChart";
 import ParticipantsPanel from "../components/trip/ParticipantsPanel";
 import ParticipantSummary from "../components/trip/ParticipantSummary";
 import PaymentsPanel from "../components/trip/PaymentsPanel";
+import PendingPaymentConfirmations from "../components/trip/PendingPaymentConfirmations";
 import RefreshFab from "../components/trip/RefreshFab";
 import SettlementPanel from "../components/trip/SettlementPanel";
 import SpendingTrendChart from "../components/trip/SpendingTrendChart";
@@ -47,6 +48,8 @@ export default function TripDetailPage() {
     removeExpense,
     recordPayment,
     removePayment,
+    confirmPendingPayment,
+    rejectPendingPayment,
     renameTrip,
     removeTrip,
   } = useTripDetail(tripId);
@@ -129,6 +132,15 @@ export default function TripDetailPage() {
 
       {error ? <div className="alert">{error}</div> : null}
 
+      <PendingPaymentConfirmations
+        participants={trip.participants}
+        payments={trip.payments}
+        currentUserId={user?.id}
+        isSaving={isSaving}
+        onConfirm={confirmPendingPayment}
+        onReject={rejectPendingPayment}
+      />
+
       <DashboardSummary
         trip={trip}
         spendingByCurrency={spendingByCurrency}
@@ -143,7 +155,9 @@ export default function TripDetailPage() {
 
       <SettlementPanel
         tripId={trip.id}
+        participants={trip.participants}
         settlements={settlements}
+        currentUserId={user?.id}
         isSaving={isSaving}
         onRecordPayment={recordPayment}
       />
@@ -173,6 +187,7 @@ export default function TripDetailPage() {
         payments={trip.payments}
         participantNames={participantNames}
         settlements={settlements}
+        currentUserId={user?.id}
         isSaving={isSaving}
         onRecordPayment={recordPayment}
         onRemovePayment={removePayment}

@@ -227,6 +227,10 @@ a {
   padding: 18px;
 }
 
+.pending-confirmations {
+  border-left: 4px solid #d99a2b;
+}
+
 .panel-heading {
   align-items: center;
   display: flex;

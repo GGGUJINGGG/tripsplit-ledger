@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 from app.currencies import VALID_CURRENCY_CODES
-from app.orm_models import ExpenseCategory, ExpenseType, MemberRole
+from app.orm_models import ExpenseCategory, ExpenseType, MemberRole, PaymentStatus
 
 
 def _validate_currency_code(value: Optional[str]) -> Optional[str]:
@@ -224,6 +224,7 @@ class PaymentRead(BaseModel):
     currency: str
     date: DataType
     note: Optional[str]
+    status: PaymentStatus
     created_at: datetime
     updated_at: datetime
 

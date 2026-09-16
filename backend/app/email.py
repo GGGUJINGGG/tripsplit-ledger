@@ -125,3 +125,42 @@ def send_settlement_reminder_email(
         debts,
         trip_url,
     )
+
+
+def send_payment_confirmation_request_email(
+    to_email: str,
+    trip_name: str,
+    payer_name: str,
+    amount: float,
+    currency: str,
+    trip_url: str,
+) -> None:
+    """Tell someone a payment has been recorded as paid to them and is
+    waiting on their confirmation before it counts toward anyone's
+    balance — see app/services/calculations.py for why pending payments
+    are excluded from balance math until then.
+
+    Same Resend-or-log stand-in as the other transactional emails.
+    """
+    formatted_amount = f"{currency} {amount:.2f}"
+
+    if settings.resend_api_key:
+        _send_via_resend(
+            to_email,
+            f'{payer_name} says they paid you on "{trip_name}"',
+            f"<p>{payer_name} recorded a payment of {formatted_amount} to you "
+            f'on "{trip_name}". It won\'t count toward anyone\'s balance until '
+            "you confirm you actually received it.</p>"
+            f'<p><a href="{trip_url}">Review and confirm</a></p>',
+        )
+        return
+
+    logger.info(
+        "Payment confirmation requested: %s says they paid %s to %s on "
+        "'%s' — review at %s",
+        payer_name,
+        formatted_amount,
+        to_email,
+        trip_name,
+        trip_url,
+    )

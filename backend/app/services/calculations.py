@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Any
 
-from app.orm_models import ExpenseCategory, ExpenseType
+from app.orm_models import ExpenseCategory, ExpenseType, PaymentStatus
 from app.schemas import (
     CategorySpending,
     DailySpending,
@@ -161,6 +161,17 @@ def owed_by_person_cents(
     return owed_totals
 
 
+def is_confirmed_payment(payment: Any) -> bool:
+    """A pending or rejected payment hasn't actually settled anything
+    yet, so it must not move any balance — see Payment's docstring in
+    app/orm_models.py for why a payment can be pending in the first
+    place. Lightweight test stand-ins that predate the status field
+    have no .status at all; treat those as confirmed, matching what a
+    real Payment row defaults to."""
+    status = getattr(payment, "status", PaymentStatus.CONFIRMED)
+    return str(status) == PaymentStatus.CONFIRMED.value
+
+
 def payments_sent_cents(
     trip: Any,
     currency: str | None = None,
@@ -169,6 +180,8 @@ def payments_sent_cents(
     totals = {participant.id: 0 for participant in participants}
 
     for payment in getattr(trip, "payments", []):
+        if not is_confirmed_payment(payment):
+            continue
         if currency is not None and payment.currency != currency:
             continue
         totals[payment.from_member_id] += amount_to_cents(payment.amount)
@@ -184,6 +197,8 @@ def payments_received_cents(
     totals = {participant.id: 0 for participant in participants}
 
     for payment in getattr(trip, "payments", []):
+        if not is_confirmed_payment(payment):
+            continue
         if currency is not None and payment.currency != currency:
             continue
         totals[payment.to_member_id] += amount_to_cents(payment.amount)

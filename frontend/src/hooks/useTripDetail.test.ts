@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DashboardSummary, Trip } from "../types";
+import type { DashboardSummary, Payment, Trip } from "../types";
 import { useTripDetail } from "./useTripDetail";
 
 vi.mock("../api/trips", () => ({ getTrip: vi.fn() }));
@@ -19,10 +19,12 @@ vi.mock("../api/expenses", () => ({
 vi.mock("../api/payments", () => ({
   createPayment: vi.fn(),
   deletePayment: vi.fn(),
+  confirmPayment: vi.fn(),
+  rejectPayment: vi.fn(),
 }));
 
 import { getDashboard } from "../api/dashboard";
-import { createPayment, deletePayment } from "../api/payments";
+import { confirmPayment, createPayment, deletePayment, rejectPayment } from "../api/payments";
 import { getSettlements } from "../api/settlements";
 import { getTrip } from "../api/trips";
 
@@ -74,6 +76,23 @@ function buildDashboard(overrides: Partial<DashboardSummary> = {}): DashboardSum
       { participant_id: "p1", name: "Alex", balance: 50 },
       { participant_id: "p2", name: "Maya", balance: -50 },
     ],
+    ...overrides,
+  };
+}
+
+function buildPayment(overrides: Partial<Payment> = {}): Payment {
+  return {
+    id: "payment-1",
+    trip_id: "trip-1",
+    from_participant: "p2",
+    to_participant: "p1",
+    amount: 50,
+    currency: "USD",
+    date: "2026-07-02",
+    note: null,
+    status: "pending",
+    created_at: "2026-07-02T00:00:00Z",
+    updated_at: "2026-07-02T00:00:00Z",
     ...overrides,
   };
 }
@@ -237,6 +256,7 @@ describe("useTripDetail", () => {
       currency: "USD",
       date: "2026-07-02",
       note: null,
+      status: "confirmed",
       created_at: "2026-07-02T00:00:00Z",
       updated_at: "2026-07-02T00:00:00Z",
     });
@@ -426,6 +446,42 @@ describe("useTripDetail", () => {
       expect(result.current.isRefreshing).toBe(false);
       // A manual refresh is still a "quiet" reload — no full-page spinner.
       expect(result.current.isLoading).toBe(false);
+    });
+  });
+
+  describe("payment confirmation", () => {
+    it("confirmPendingPayment confirms the payment then refreshes the trip", async () => {
+      const trip = buildTrip();
+      vi.mocked(getTrip).mockResolvedValue(trip);
+      vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+      vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+      vi.mocked(confirmPayment).mockResolvedValue(buildPayment());
+
+      const { result } = renderHook(() => useTripDetail("trip-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const succeeded = await result.current.confirmPendingPayment("payment-1");
+
+      expect(succeeded).toBe(true);
+      expect(confirmPayment).toHaveBeenCalledWith("trip-1", "payment-1");
+      expect(getTrip).toHaveBeenCalledTimes(2);
+    });
+
+    it("rejectPendingPayment rejects the payment then refreshes the trip", async () => {
+      const trip = buildTrip();
+      vi.mocked(getTrip).mockResolvedValue(trip);
+      vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+      vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+      vi.mocked(rejectPayment).mockResolvedValue(buildPayment());
+
+      const { result } = renderHook(() => useTripDetail("trip-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const succeeded = await result.current.rejectPendingPayment("payment-1");
+
+      expect(succeeded).toBe(true);
+      expect(rejectPayment).toHaveBeenCalledWith("trip-1", "payment-1");
+      expect(getTrip).toHaveBeenCalledTimes(2);
     });
   });
 });
