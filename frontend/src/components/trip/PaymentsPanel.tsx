@@ -1,13 +1,14 @@
 import { FormEvent, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
-import type { Participant, Payment, PaymentCreate } from "../../types";
+import type { Participant, Payment, PaymentCreate, Settlement } from "../../types";
 import { type CurrencyCode, currencies, formatMoney } from "../../utils/currency";
 
 interface PaymentsPanelProps {
   participants: Participant[];
   payments: Payment[];
   participantNames: Map<string, string>;
+  settlements: Settlement[];
   isSaving: boolean;
   onRecordPayment: (payload: PaymentCreate) => Promise<boolean>;
   onRemovePayment: (paymentId: string) => Promise<boolean>;
@@ -17,6 +18,7 @@ export default function PaymentsPanel({
   participants,
   payments,
   participantNames,
+  settlements,
   isSaving,
   onRecordPayment,
   onRemovePayment,
@@ -39,6 +41,22 @@ export default function PaymentsPanel({
     setFormError(null);
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+
+  // How much this person is currently owed in total, in this currency —
+  // not just from the one payer selected below, so covering someone
+  // else's share in the same payment (e.g. paying a friend's portion
+  // too) is never mistaken for an oversized/mistyped amount.
+  function totalOwedTo(participantId: string, forCurrency: CurrencyCode): number {
+    return settlements
+      .filter(
+        (settlement) =>
+          settlement.to_participant_id === participantId &&
+          settlement.currency === forCurrency,
+      )
+      .reduce((sum, settlement) => sum + settlement.amount, 0);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -55,6 +73,22 @@ export default function PaymentsPanel({
       setFormError("Amount must be greater than 0.");
       return;
     }
+    if (date && date > today) {
+      setFormError("Date can't be in the future.");
+      return;
+    }
+
+    const owed = totalOwedTo(toParticipant, currency);
+    if (parsedAmount > owed) {
+      const recipientName = participantNames.get(toParticipant) ?? "this person";
+      const confirmed = window.confirm(
+        `${recipientName} is currently only owed ${formatMoney(currency, owed)}. ` +
+          `Record this ${formatMoney(currency, parsedAmount)} payment anyway?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
 
     setFormError(null);
     const succeeded = await onRecordPayment({
@@ -62,7 +96,7 @@ export default function PaymentsPanel({
       to_participant: toParticipant,
       amount: parsedAmount,
       currency,
-      date: date || new Date().toISOString().slice(0, 10),
+      date: date || today,
       note: note.trim() || undefined,
     });
 
@@ -140,6 +174,7 @@ export default function PaymentsPanel({
             id="payment-date"
             type="date"
             value={date}
+            max={today}
             onChange={(event) => setDate(event.target.value)}
           />
         </label>

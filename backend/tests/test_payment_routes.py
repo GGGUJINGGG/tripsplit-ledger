@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from tests.base import AuthenticatedDatabaseTestCase
 
 
@@ -136,6 +138,33 @@ class PaymentRouteTests(AuthenticatedDatabaseTestCase):
             },
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_rejects_a_future_date(self) -> None:
+        tomorrow = date.today() + timedelta(days=1)
+        response = self.client.post(
+            f"/api/trips/{self.trip['id']}/payments",
+            json={
+                "from_participant": self.maya["id"],
+                "to_participant": self.owner["id"],
+                "amount": 25,
+                "date": str(tomorrow),
+                "currency": "USD",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_accepts_todays_date(self) -> None:
+        response = self.client.post(
+            f"/api/trips/{self.trip['id']}/payments",
+            json={
+                "from_participant": self.maya["id"],
+                "to_participant": self.owner["id"],
+                "amount": 25,
+                "date": str(date.today()),
+                "currency": "USD",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
 
     def test_deleting_an_unknown_payment_returns_404(self) -> None:
         response = self.client.delete(

@@ -38,28 +38,41 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 **Spending summary**
 - Per-participant breakdown: total paid, shared responsibility, personal spending, and net balance
 - Category summary table showing shared vs. personal totals across all 7 categories
-- Daily spending timeline
 
 **Settlements**
-- Simplified payment plan that minimizes the number of transactions
+- Simplified payment plan that minimizes the number of transactions, computed independently per currency for mixed-currency trips
 - Settlement amounts consistent with per-participant net balances
+- Record an actual payment between two participants — one click to mark a suggested settlement as paid, or a freeform amount/currency/date/note for a partial or unprompted payment — and undo it if it was a mistake; net balances and settlement suggestions update immediately
+
+**Reminders**
+- Automated email reminders for outstanding balances: the day after a trip's `end_date` (if set), or every Monday for a trip with no end date — skipped once everyone's settled up, and requires no manual trigger once the scheduled job is deployed (see [Deployment](#deployment))
+
+**Visualizations**
+- Daily spending trend chart, a category breakdown pie chart, and a per-participant "who paid" comparison chart, each split into one series per currency for mixed-currency trips
+
+**Mobile**
+- Installable as a Progressive Web App — "Add to Home Screen" on iOS/Android for a full-screen, app-like launch experience with no browser chrome
 
 **Export**
 - CSV export of the full expense ledger with all filters applied
 
 ## Known Limitations
 
-- **No multi-currency settlement** — expenses can be tagged with a currency, but settlement calculations are hidden when a trip mixes currencies. Exchange-rate conversion is not yet implemented. The backend's `/dashboard` totals (spending by category/day, paid/owed per person) are also not currency-segmented — they sum raw amounts across currencies, so those numbers aren't meaningful for a mixed-currency trip. The frontend works around this by computing its own per-currency breakdowns instead of relying on those backend fields.
+- **No exchange-rate conversion** — settlements, spending totals, and the category/daily/who-paid charts are all computed independently per currency (a trip with both USD and CNY shared expenses gets two separate settlement suggestions, two separate chart series, and so on), but nothing is ever converted into a common currency. The one exception is the backend's `/dashboard` `total_trip_spending`/`paid_by_person`/`owed_by_person`/`net_balances` fields — those still sum raw amounts across currencies without segmenting them, so those specific numbers aren't meaningful for a mixed-currency trip; the frontend works around it by computing its own per-currency breakdowns instead (and shows "Mixed currencies" in place of a number for shared responsibility/net balance when a trip has more than one currency).
 - **No frontend UI for inviting members beyond the invite-by-email form** — the API also enforces owner-only rules here, but there's no bulk invite or member-management screen beyond that one form.
 - **Expense Ledger pagination is client-side** — `GET /trips/{id}/expenses` supports real `limit`/`offset` query params, but the frontend still loads a trip's full expense list in one request (it's embedded in `GET /trips/{id}`, which the dashboard and CSV export also depend on) and paginates 25 rows at a time in the browser. That keeps the table usable at moderate scale but doesn't reduce what's transferred over the network — a trip with tens of thousands of expenses would need the frontend to fetch pages from the paginated endpoint directly instead.
-- **Password reset and trip invite emails are only sent if `RESEND_API_KEY` is set** — without it, `POST /auth/forgot-password` and `POST /trips/{id}/participants/invite` log the link server-side instead. With a [Resend](https://resend.com) key configured (see `backend/.env.example`), they send for real — though without a verified sending domain, Resend restricts delivery to the `onboarding@resend.dev` sender and to the Resend account's own email address, so real invites to other people still need a verified domain.
+- **Password reset, trip invite, and settlement-reminder emails are only sent if `RESEND_API_KEY` is set** — without it, the relevant email functions log the content server-side instead of sending. This deployment has `RESEND_API_KEY` and a verified sending domain (`tripsplitledger.com`, via Cloudflare) configured in production, so those emails go out for real; running your own copy without a verified domain restricts Resend delivery to the `onboarding@resend.dev` sender and to your own Resend account's email address.
+- **Settlement reminders run on a fixed UTC cron schedule, not each trip's local time** — the reminder job (see [Deployment](#deployment)) fires once daily at a fixed UTC hour; "the day after a trip ends" and "every Monday" are both evaluated in UTC, so depending on timezone a reminder can land a few hours earlier or later than local midnight/Monday.
 - **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
 - **Error monitoring (Sentry) is wired up but not turned on** — the backend logs structured JSON for every request (method, path, status, duration) by default, but exception tracking via Sentry only activates if `SENTRY_DSN` is set (see `backend/.env.example`); no Sentry project is configured for this deployment.
+- **The PWA isn't tuned for iOS's full-screen safe areas yet** — installing it to a home screen and launching it standalone works, but the layout hasn't been adjusted for the notch/Dynamic Island and home indicator areas that the browser chrome normally insets around.
 
 ## Planned
 
-- Exchange-rate conversion to enable settlements across mixed-currency trips
+- Exchange-rate conversion, so a mixed-currency trip shows one combined settlement instead of one per currency
 - Budget tracking per trip or per category
+- Native app-store packaging (Capacitor or React Native) — the current PWA installs to a home screen but isn't listed on the App Store or Google Play
+- Safe-area-aware layout for the installed PWA's full-screen mode on iOS
 
 ## Architecture
 
@@ -71,7 +84,7 @@ flowchart LR
 
     subgraph Server["FastAPI backend"]
         Auth["/api/auth<br/>register · login · refresh · logout ·<br/>forgot/reset-password · me"]
-        Trips["/api/trips<br/>trips · participants · expenses"]
+        Trips["/api/trips<br/>trips · participants · expenses · payments"]
         Invite["/api/invitations<br/>accept/decline a pending invite"]
         Dash["/api/trips/{id}/dashboard"]
         Settle["/api/trips/{id}/settlements"]
@@ -95,6 +108,8 @@ Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`,
 
 Access tokens expire after 30 minutes; the frontend transparently exchanges the (longer-lived, rotating) refresh token for a new one on a 401 instead of forcing a re-login. `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP.
 
+Not shown in the diagram: `backend/app/scripts/send_settlement_reminders.py` runs outside the request/response cycle above, as a separate scheduled job (see [Deployment](#deployment)) rather than an API route — it reads the same database directly and reuses the settlements service to decide who to email.
+
 ### Database schema
 
 ```mermaid
@@ -102,7 +117,10 @@ erDiagram
     USERS ||--o{ TRIP_MEMBERS : "has (nullable once removed)"
     TRIPS ||--o{ TRIP_MEMBERS : "has"
     TRIPS ||--o{ EXPENSES : "has"
+    TRIPS ||--o{ PAYMENTS : "has"
     TRIP_MEMBERS ||--o{ EXPENSES : "pays for"
+    TRIP_MEMBERS ||--o{ PAYMENTS : "sends (from_member)"
+    TRIP_MEMBERS ||--o{ PAYMENTS : "receives (to_member)"
     EXPENSES ||--o{ EXPENSE_SHARES : "split into"
     TRIP_MEMBERS ||--o{ EXPENSE_SHARES : "owes"
 
@@ -117,6 +135,8 @@ erDiagram
         string name
         date start_date
         date end_date
+        datetime end_date_reminder_sent_at "nullable, one-time reminder guard"
+        date last_weekly_reminder_date "nullable, weekly reminder guard"
     }
     TRIP_MEMBERS {
         uuid id PK
@@ -144,9 +164,21 @@ erDiagram
         uuid member_id FK
         int amount_cents
     }
+    PAYMENTS {
+        uuid id PK
+        uuid trip_id FK
+        uuid from_member_id FK
+        uuid to_member_id FK
+        int amount_cents
+        string currency
+        date date
+        text note
+    }
 ```
 
-`trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `invited_email` is set on the same nullable-`user_id` row for a pending email invite (regardless of whether that email is already registered) — it isn't a real membership until accepted: registering with a matching email claims every such row across every trip at once (see `register_user()` in `app/routers/auth.py`), and a registered user accepts individually from `GET /api/invitations` (see `app/routers/invitations.py`). `expenses.amount_cents` and `expense_shares.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill; see [Calculation Logic](#calculation-logic).
+`trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `invited_email` is set on the same nullable-`user_id` row for a pending email invite (regardless of whether that email is already registered) — it isn't a real membership until accepted: registering with a matching email claims every such row across every trip at once (see `register_user()` in `app/routers/auth.py`), and a registered user accepts individually from `GET /api/invitations` (see `app/routers/invitations.py`). `expenses.amount_cents`, `expense_shares.amount_cents`, and `payments.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill or recording a payment; see [Calculation Logic](#calculation-logic).
+
+A `Payment` is a real transfer between two trip members recorded to settle an existing debt — it isn't spending, so it never counts toward any spending total, but it nets directly into that currency's balances and settlement suggestions (see [Calculation Logic](#calculation-logic)). `trips.end_date_reminder_sent_at` and `trips.last_weekly_reminder_date` exist purely so the settlement-reminder job (see [Deployment](#deployment)) doesn't email the same trip twice for the same occasion.
 
 ## Backend Setup
 
@@ -265,11 +297,13 @@ Once both are live, walk through this once end-to-end:
 - [ ] Create a trip
 - [ ] Add a participant
 - [ ] Add, edit, and delete an expense
-- [ ] View the dashboard and category breakdown
-- [ ] View the settlement summary
+- [ ] View the dashboard, category breakdown, and spending charts
+- [ ] View the settlement summary; record a payment and confirm balances update
 - [ ] Log out, log back in
 - [ ] Confirm the trip and its data are still there
 - [ ] Register a second account and confirm it can't see the first account's trips
+- [ ] Open the deployed frontend on a phone browser and confirm it offers "Add to Home Screen"
+- [ ] Manually trigger the settlement-reminder cron service once and confirm its logs show `Sent settlement reminders for N trip(s)`
 
 ## API Overview
 
@@ -322,6 +356,14 @@ PUT    /api/trips/{trip_id}/expenses/{expense_id}
 DELETE /api/trips/{trip_id}/expenses/{expense_id}
 ```
 
+Payments:
+
+```text
+GET    /api/trips/{trip_id}/payments
+POST   /api/trips/{trip_id}/payments
+DELETE /api/trips/{trip_id}/payments/{payment_id}
+```
+
 Dashboard and settlements:
 
 ```text
@@ -339,9 +381,11 @@ The backend calculates:
 - Amount paid by each person
 - Amount owed by each person
 - Net balances
-- Simplified settlement payments
+- Simplified settlement payments, computed independently per currency
 
-Expense shares are calculated in cents to avoid floating point drift.
+Recorded payments (an actual transfer between two participants, not an expense) net directly into that currency's balances and settlement suggestions — a payment moves a debtor's balance toward zero and a creditor's balance down by the same amount, without changing anyone's spending totals or share of the trip's costs.
+
+Expense shares and payment amounts are calculated in cents to avoid floating point drift.
 
 ## Example Expense Payload
 

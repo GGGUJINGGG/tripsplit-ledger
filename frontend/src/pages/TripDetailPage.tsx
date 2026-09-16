@@ -167,6 +167,7 @@ export default function TripDetailPage() {
         participants={trip.participants}
         payments={trip.payments}
         participantNames={participantNames}
+        settlements={settlements}
         isSaving={isSaving}
         onRecordPayment={recordPayment}
         onRemovePayment={removePayment}

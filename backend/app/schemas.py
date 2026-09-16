@@ -198,6 +198,13 @@ class PaymentCreate(BaseModel):
         _validate_currency_code
     )
 
+    @field_validator("date")
+    @classmethod
+    def date_must_not_be_in_the_future(cls, value: DataType) -> DataType:
+        if value > DataType.today():
+            raise ValueError("date cannot be in the future")
+        return value
+
     @model_validator(mode="after")
     def from_and_to_must_differ(self) -> "PaymentCreate":
         if self.from_participant == self.to_participant:
