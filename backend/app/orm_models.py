@@ -369,12 +369,24 @@ class Expense(TimestampMixin, Base):
     def date(self) -> date:
         return self.expense_date
 
+class PaymentStatus(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
 class Payment(TimestampMixin, Base):
     """An actual transfer of money between two trip members, recorded to
     settle up part or all of what expense-splitting says they owe each
     other. Kept separate from Expense: a payment isn't spending, it just
     moves an existing debt, so it's netted into balances rather than
-    counted toward any spending total."""
+    counted toward any spending total.
+
+    A payment to a member who isn't a registered user takes effect
+    immediately (status=CONFIRMED) since there's nobody who could log in
+    to confirm it. A payment to a registered member starts PENDING and
+    is excluded from every balance calculation until that member
+    confirms or rejects it — see app/services/calculations.py."""
 
     __tablename__ = "payments"
     __table_args__ = (
@@ -427,6 +439,23 @@ class Payment(TimestampMixin, Base):
     )
     note: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+    status: Mapped[PaymentStatus] = mapped_column(
+        Enum(
+            PaymentStatus,
+            name="payment_status",
+            native_enum=False,
+            create_constraint=True,
+            values_callable=lambda enum_class: [
+                member.value for member in enum_class
+            ],
+        ),
+        default=PaymentStatus.CONFIRMED,
+        nullable=False,
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 

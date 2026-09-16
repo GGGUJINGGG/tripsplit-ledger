@@ -16,3 +16,15 @@ export function deletePayment(tripId: string, paymentId: string): Promise<void> 
     method: "DELETE",
   });
 }
+
+export function confirmPayment(tripId: string, paymentId: string): Promise<Payment> {
+  return apiRequest<Payment>(`/trips/${tripId}/payments/${paymentId}/confirm`, {
+    method: "POST",
+  });
+}
+
+export function rejectPayment(tripId: string, paymentId: string): Promise<Payment> {
+  return apiRequest<Payment>(`/trips/${tripId}/payments/${paymentId}/reject`, {
+    method: "POST",
+  });
+}

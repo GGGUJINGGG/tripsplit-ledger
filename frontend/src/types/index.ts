@@ -41,6 +41,8 @@ export interface Expense {
   updated_at: string;
 }
 
+export type PaymentStatus = "pending" | "confirmed" | "rejected";
+
 export interface Payment {
   id: string;
   trip_id: string;
@@ -50,6 +52,7 @@ export interface Payment {
   currency: string;
   date: string;
   note?: string | null;
+  status: PaymentStatus;
   created_at: string;
   updated_at: string;
 }

@@ -5,6 +5,7 @@ from app.services.calculations import (
     cents_to_float,
     get_participant_name,
     get_participants,
+    is_confirmed_payment,
     is_shared_expense,
     net_balances_cents,
 )
@@ -17,7 +18,11 @@ def simplify_settlements(trip: Any) -> SettlementSummary:
             for expense in trip.expenses
             if is_shared_expense(expense)
         }
-        | {payment.currency for payment in getattr(trip, "payments", [])}
+        | {
+            payment.currency
+            for payment in getattr(trip, "payments", [])
+            if is_confirmed_payment(payment)
+        }
     )
 
     settlements: list[Settlement] = []

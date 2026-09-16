@@ -7,7 +7,7 @@ import {
   deleteParticipant,
   inviteParticipant,
 } from "../api/participants";
-import { createPayment, deletePayment } from "../api/payments";
+import { confirmPayment, createPayment, deletePayment, rejectPayment } from "../api/payments";
 import { getSettlements } from "../api/settlements";
 import { deleteTrip, getTrip, updateTrip } from "../api/trips";
 import type {
@@ -401,6 +401,40 @@ export function useTripDetail(tripId: string | undefined) {
     }
   }
 
+  async function confirmPendingPayment(paymentId: string): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await confirmPayment(tripId, paymentId);
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to confirm payment");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function rejectPendingPayment(paymentId: string): Promise<boolean> {
+    if (!tripId) return false;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await rejectPayment(tripId, paymentId);
+      await loadTrip(false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to decline payment");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return {
     trip,
     settlements,
@@ -425,6 +459,8 @@ export function useTripDetail(tripId: string | undefined) {
     removeExpense,
     recordPayment,
     removePayment,
+    confirmPendingPayment,
+    rejectPendingPayment,
     renameTrip,
     removeTrip,
   };

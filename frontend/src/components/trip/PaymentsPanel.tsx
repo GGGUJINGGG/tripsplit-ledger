@@ -9,6 +9,7 @@ interface PaymentsPanelProps {
   payments: Payment[];
   participantNames: Map<string, string>;
   settlements: Settlement[];
+  currentUserId?: string;
   isSaving: boolean;
   onRecordPayment: (payload: PaymentCreate) => Promise<boolean>;
   onRemovePayment: (paymentId: string) => Promise<boolean>;
@@ -19,6 +20,7 @@ export default function PaymentsPanel({
   payments,
   participantNames,
   settlements,
+  currentUserId,
   isSaving,
   onRecordPayment,
   onRemovePayment,
@@ -42,6 +44,13 @@ export default function PaymentsPanel({
   }
 
   const today = new Date().toISOString().slice(0, 10);
+
+  // A registered member can only be claimed as the payer by themselves —
+  // a placeholder (no account) member has nobody who could object, so
+  // anyone can still record a payment on their behalf.
+  const eligiblePayers = participants.filter(
+    (participant) => participant.user_id == null || participant.user_id === currentUserId,
+  );
 
   // How much this person is currently owed in total, in this currency —
   // not just from the one payer selected below, so covering someone
@@ -111,6 +120,11 @@ export default function PaymentsPanel({
         <h2>Record a Payment</h2>
       </div>
       {formError ? <div className="alert">{formError}</div> : null}
+      <p className="field-hint">
+        A registered member can only be recorded as having paid by themselves — a
+        member with no account can be recorded by anyone, since they can't log in
+        to do it themselves.
+      </p>
       <form className="form-grid compact" onSubmit={handleSubmit}>
         <label htmlFor="payment-from">
           Paid by
@@ -120,7 +134,7 @@ export default function PaymentsPanel({
             onChange={(event) => setFromParticipant(event.target.value)}
           >
             <option value="">Select person</option>
-            {participants.map((participant) => (
+            {eligiblePayers.map((participant) => (
               <option key={participant.id} value={participant.id}>
                 {participant.name}
               </option>
@@ -197,30 +211,40 @@ export default function PaymentsPanel({
 
       {payments.length > 0 ? (
         <div className="settlement-list payment-history">
-          {payments.map((payment) => (
-            <div className="settlement-row" key={payment.id}>
-              <span>
-                <strong>{participantNames.get(payment.from_participant) ?? "Unknown"}</strong>{" "}
-                paid{" "}
-                <strong>{participantNames.get(payment.to_participant) ?? "Unknown"}</strong>
-                {payment.note ? <span className="cell-note"> — {payment.note}</span> : null}
-                <span className="cell-note"> · {payment.date}</span>
-              </span>
-              <div className="settlement-row-actions">
-                <strong>{formatMoney(payment.currency, payment.amount)}</strong>
-                <button
-                  className="table-action-button danger"
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => void onRemovePayment(payment.id)}
-                  aria-label="Undo this payment"
-                  title="Undo this payment"
-                >
-                  <Trash2 size={16} />
-                </button>
+          {payments.map((payment) => {
+            const recipientName = participantNames.get(payment.to_participant) ?? "Unknown";
+            const statusNote =
+              payment.status === "pending"
+                ? `Pending ${recipientName}'s confirmation`
+                : payment.status === "rejected"
+                  ? `Declined by ${recipientName}`
+                  : null;
+
+            return (
+              <div className="settlement-row" key={payment.id}>
+                <span>
+                  <strong>{participantNames.get(payment.from_participant) ?? "Unknown"}</strong>{" "}
+                  paid <strong>{recipientName}</strong>
+                  {payment.note ? <span className="cell-note"> — {payment.note}</span> : null}
+                  <span className="cell-note"> · {payment.date}</span>
+                  {statusNote ? <span className="cell-note"> · {statusNote}</span> : null}
+                </span>
+                <div className="settlement-row-actions">
+                  <strong>{formatMoney(payment.currency, payment.amount)}</strong>
+                  <button
+                    className="table-action-button danger"
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => void onRemovePayment(payment.id)}
+                    aria-label="Undo this payment"
+                    title="Undo this payment"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </section>

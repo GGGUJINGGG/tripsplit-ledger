@@ -272,6 +272,7 @@ describe("PaymentsPanel", () => {
           currency: "CNY",
           date: "2026-09-05",
           note: "Parking split",
+          status: "confirmed",
           created_at: "2026-09-05T00:00:00Z",
           updated_at: "2026-09-05T00:00:00Z",
         },
@@ -282,6 +283,50 @@ describe("PaymentsPanel", () => {
     expect(screen.getByText("Gujing", { selector: "strong" })).toBeInTheDocument();
     expect(screen.getByText("CNY 20.00")).toBeInTheDocument();
     expect(screen.getByText(/Parking split/)).toBeInTheDocument();
+  });
+
+  it("shows a pending note naming the recipient who needs to confirm", () => {
+    renderPanel({
+      payments: [
+        {
+          id: "pay-1",
+          trip_id: "trip-1",
+          from_participant: "p2",
+          to_participant: "p1",
+          amount: 20,
+          currency: "USD",
+          date: "2026-09-05",
+          note: null,
+          status: "pending",
+          created_at: "2026-09-05T00:00:00Z",
+          updated_at: "2026-09-05T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(screen.getByText(/Pending Gujing's confirmation/)).toBeInTheDocument();
+  });
+
+  it("shows a declined note naming the recipient who declined", () => {
+    renderPanel({
+      payments: [
+        {
+          id: "pay-1",
+          trip_id: "trip-1",
+          from_participant: "p2",
+          to_participant: "p1",
+          amount: 20,
+          currency: "USD",
+          date: "2026-09-05",
+          note: null,
+          status: "rejected",
+          created_at: "2026-09-05T00:00:00Z",
+          updated_at: "2026-09-05T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(screen.getByText(/Declined by Gujing/)).toBeInTheDocument();
   });
 
   it("calls onRemovePayment with the payment id when undo is clicked", async () => {
@@ -297,6 +342,7 @@ describe("PaymentsPanel", () => {
           currency: "USD",
           date: "2026-09-05",
           note: null,
+          status: "confirmed",
           created_at: "2026-09-05T00:00:00Z",
           updated_at: "2026-09-05T00:00:00Z",
         },
@@ -306,5 +352,36 @@ describe("PaymentsPanel", () => {
     await user.click(screen.getByRole("button", { name: /undo this payment/i }));
 
     expect(onRemovePayment).toHaveBeenCalledWith("pay-1");
+  });
+});
+
+describe("PaymentsPanel payer restriction", () => {
+  it("excludes a registered participant who isn't the current user from 'Paid by'", () => {
+    const restrictedParticipants: Participant[] = [
+      { id: "p1", name: "Gujing", user_id: "user-gujing", role: "owner" },
+      { id: "p2", name: "Anita", user_id: "user-anita", role: "member" },
+      { id: "p3", name: "Guest Sam", role: "member" },
+    ];
+    render(
+      <PaymentsPanel
+        participants={restrictedParticipants}
+        payments={[]}
+        participantNames={participantNames}
+        settlements={[]}
+        currentUserId="user-gujing"
+        isSaving={false}
+        onRecordPayment={vi.fn().mockResolvedValue(true)}
+        onRemovePayment={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    const paidByOptions = Array.from(
+      screen.getByLabelText("Paid by").querySelectorAll("option"),
+    ).map((option) => option.textContent);
+
+    // The current user (self-reporting) and the placeholder participant
+    // (nobody else could report for them) are both eligible; the other
+    // registered member is not.
+    expect(paidByOptions).toEqual(["Select person", "Gujing", "Guest Sam"]);
   });
 });
