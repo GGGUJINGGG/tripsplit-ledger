@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardSummary, Trip } from "../types";
@@ -359,5 +359,73 @@ describe("useTripDetail", () => {
       { date: "2026-07-01", currency: "CNY", amount: 30 },
       { date: "2026-07-02", currency: "USD", amount: 40 },
     ]);
+  });
+
+  describe("refresh on tab visibility", () => {
+    afterEach(() => {
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+    });
+
+    it("quietly reloads the trip when the tab becomes visible again", async () => {
+      vi.mocked(getTrip).mockResolvedValue(buildTrip());
+      vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+      vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+
+      const { result } = renderHook(() => useTripDetail("trip-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(getTrip).toHaveBeenCalledTimes(1);
+
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      await waitFor(() => expect(getTrip).toHaveBeenCalledTimes(2));
+      // Silent refresh: no loading spinner for a background revalidation.
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("does not reload while the tab is hidden", async () => {
+      vi.mocked(getTrip).mockResolvedValue(buildTrip());
+      vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+      vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+
+      const { result } = renderHook(() => useTripDetail("trip-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(getTrip).toHaveBeenCalledTimes(1);
+
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(getTrip).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("refreshTrip", () => {
+    it("reloads the trip and toggles isRefreshing around the request", async () => {
+      vi.mocked(getTrip).mockResolvedValue(buildTrip());
+      vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
+      vi.mocked(getDashboard).mockResolvedValue(buildDashboard());
+
+      const { result } = renderHook(() => useTripDetail("trip-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(getTrip).toHaveBeenCalledTimes(1);
+      expect(result.current.isRefreshing).toBe(false);
+
+      let refreshPromise!: Promise<void>;
+      act(() => {
+        refreshPromise = result.current.refreshTrip();
+      });
+      expect(result.current.isRefreshing).toBe(true);
+      await act(() => refreshPromise);
+
+      expect(getTrip).toHaveBeenCalledTimes(2);
+      expect(result.current.isRefreshing).toBe(false);
+      // A manual refresh is still a "quiet" reload — no full-page spinner.
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 });

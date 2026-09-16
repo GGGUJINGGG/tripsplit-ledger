@@ -29,6 +29,7 @@ export function useTripDetail(tripId: string | undefined) {
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadTrip(showLoading = true): Promise<Trip | null> {
@@ -69,6 +70,22 @@ export function useTripDetail(tripId: string | undefined) {
 
   useEffect(() => {
     void loadTrip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
+
+  // Someone else may have changed this trip while the tab was hidden (a
+  // different device, or another participant) — refresh quietly, without
+  // the loading spinner, whenever the tab becomes visible again.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void loadTrip(false);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
@@ -220,6 +237,15 @@ export function useTripDetail(tripId: string | undefined) {
       };
     });
   }, [trip, dashboard, settlementCurrency]);
+
+  async function refreshTrip(): Promise<void> {
+    setIsRefreshing(true);
+    try {
+      await loadTrip(false);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   async function addParticipant(name: string): Promise<void> {
     if (!tripId || !name.trim()) return;
@@ -380,6 +406,7 @@ export function useTripDetail(tripId: string | undefined) {
     settlements,
     isLoading,
     isSaving,
+    isRefreshing,
     error,
     setError,
     participantNames,
@@ -390,6 +417,7 @@ export function useTripDetail(tripId: string | undefined) {
     dailySpendingByCurrency,
     participantSpendingSummary,
     settlementCurrency,
+    refreshTrip,
     addParticipant,
     inviteMember,
     removeParticipant,

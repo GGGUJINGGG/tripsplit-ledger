@@ -10,6 +10,7 @@ import ParticipantPaidChart from "../components/trip/ParticipantPaidChart";
 import ParticipantsPanel from "../components/trip/ParticipantsPanel";
 import ParticipantSummary from "../components/trip/ParticipantSummary";
 import PaymentsPanel from "../components/trip/PaymentsPanel";
+import RefreshFab from "../components/trip/RefreshFab";
 import SettlementPanel from "../components/trip/SettlementPanel";
 import SpendingTrendChart from "../components/trip/SpendingTrendChart";
 import TripHeader from "../components/trip/TripHeader";
@@ -28,6 +29,7 @@ export default function TripDetailPage() {
     settlements,
     isLoading,
     isSaving,
+    isRefreshing,
     error,
     participantNames,
     spendingByCurrency,
@@ -37,6 +39,7 @@ export default function TripDetailPage() {
     dailySpendingByCurrency,
     participantSpendingSummary,
     settlementCurrency,
+    refreshTrip,
     addParticipant,
     inviteMember,
     removeParticipant,
@@ -121,6 +124,8 @@ export default function TripDetailPage() {
         onRename={renameTrip}
         onDelete={handleDeleteTrip}
       />
+
+      <RefreshFab isRefreshing={isRefreshing} onRefresh={() => void refreshTrip()} />
 
       {error ? <div className="alert">{error}</div> : null}
 
