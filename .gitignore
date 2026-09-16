@@ -10,4 +10,4 @@ backend/app/data/
 .env
 backend/.env
 .coverage
-htmlcov/
+htmlcov/.claude/settings.local.json
