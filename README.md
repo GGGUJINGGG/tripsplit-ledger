@@ -9,8 +9,6 @@ A self-hosted group expense tracker for trips — split bills, track who paid wh
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
 
-**Live demo:** [tripsplit-ledger.vercel.app](https://tripsplit-ledger.vercel.app) — register your own account to try it (see [Deployment](#deployment) for how the frontend/backend are hosted).
-
 ## Screenshots
 
 ![Trip Detail](screenshots/trip-detail.png)
