@@ -1,20 +1,34 @@
 # TripSplit Ledger
 
+A self-hosted group expense tracker for trips — split bills, track who paid what, and see a full spending breakdown by category, day, and person instead of just a final settlement number.
+
 [![CI](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/GGGUJINGGG/tripsplit-ledger/actions/workflows/ci.yml)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
 
 **Live demo:** [tripsplit-ledger.vercel.app](https://tripsplit-ledger.vercel.app) — register your own account to try it (see [Deployment](#deployment) for how the frontend/backend are hosted).
-
-After a group trip, I used Splitwise to settle expenses with friends and ran into a few frustrations: the free tier limits how many expenses you can log per day, and it doesn't show a full spending breakdown for the trip — only who owes whom. I wanted to see total spending by category, by day, and per person, not just the final settlement numbers.
-
-That gap was the starting point. As I logged our actual trip expenses into an early version of this app, I kept noticing other things I wanted — filtering, expense types, CSV export, a per-person spending summary — and added them one by one. TripSplit Ledger is the result: a personal expense tracker built around how I actually think about group travel spending.
-
-The current implementation uses a React/Vite frontend, a FastAPI backend, and PostgreSQL persistence through SQLAlchemy 2.0. Database schema changes are managed with Alembic, and backend integration tests run against a separate PostgreSQL test database.
 
 ## Screenshots
 
 ![Trip Detail](screenshots/trip-detail.png)
 
 ![Expense Ledger](screenshots/expense-ledger.png)
+
+## Contents
+
+- [Features](#features)
+- [Known Limitations](#known-limitations)
+- [Planned](#planned)
+- [Architecture](#architecture)
+- [Backend Setup](#backend-setup)
+- [Frontend Setup](#frontend-setup)
+- [Deployment](#deployment)
+- [API Overview](#api-overview)
+- [Calculation Logic](#calculation-logic)
+- [Tests](#tests)
 
 ## Features
 
@@ -52,6 +66,7 @@ The current implementation uses a React/Vite frontend, a FastAPI backend, and Po
 
 **Mobile**
 - Installable as a Progressive Web App — "Add to Home Screen" on iOS/Android for a full-screen, app-like launch experience with no browser chrome
+- Floating quick-jump buttons (Add Expense, Record Payment, back to top) on the trip detail page below the 880px breakpoint, so a long trip doesn't require scrolling back up to reach them; hidden above that width since the two-column desktop layout already keeps everything in reach
 
 **Export**
 - CSV export of the full expense ledger with all filters applied
