@@ -52,10 +52,15 @@
   opacity: 0.75;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,
@@ -176,6 +181,7 @@ a {
 .page-stack {
   display: grid;
   gap: 22px;
+  grid-template-columns: minmax(0, 1fr);
   max-width: 1180px;
 }
 
@@ -209,6 +215,7 @@ a {
 .content-grid {
   display: grid;
   gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .two-columns {
@@ -259,6 +266,7 @@ a {
 .metric-card {
   display: grid;
   gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   padding: 18px;
 }
 
@@ -275,6 +283,7 @@ a {
 .metric-list {
   display: grid;
   gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .metric-list strong {
@@ -285,6 +294,7 @@ a {
 .form-grid {
   display: grid;
   gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .form-grid.compact {
@@ -436,10 +446,11 @@ button:disabled {
 .chart-groups {
   display: grid;
   gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .even-columns {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 table {
@@ -519,6 +530,7 @@ th {
 .settlement-groups {
   display: grid;
   gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settlement-currency-heading {
@@ -533,6 +545,7 @@ th {
 .settlement-list {
   display: grid;
   gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settlement-row {
@@ -615,6 +628,7 @@ th {
 .list-stack {
   display: grid;
   gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .list-row {
@@ -669,7 +683,7 @@ th {
 
 @media (max-width: 880px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
@@ -722,7 +736,7 @@ th {
   .summary-row,
   .form-grid.compact,
   .filter-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .filter-actions {
