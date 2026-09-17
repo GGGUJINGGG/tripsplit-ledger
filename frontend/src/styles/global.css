@@ -30,7 +30,11 @@
   background: #2563a8;
   border: 0;
   border-radius: 50%;
-  bottom: 24px;
+  /* calc(...) falls back to the plain px value on browsers/devices
+     with no safe-area inset (env() then evaluates to 0), and adds
+     clearance from the home indicator on notched iOS devices when
+     this is installed as a full-screen PWA. */
+  bottom: calc(24px + env(safe-area-inset-bottom));
   box-shadow: 0 6px 18px rgba(24, 31, 38, 0.28);
   color: #ffffff;
   cursor: pointer;
@@ -52,7 +56,7 @@
 }
 
 .refresh-fab {
-  right: 24px;
+  right: calc(24px + env(safe-area-inset-right));
 }
 
 /* These sit in the same bottom-right corner as the two-column desktop
@@ -66,16 +70,16 @@
 }
 
 .payment-fab {
-  right: 88px;
+  right: calc(88px + env(safe-area-inset-right));
 }
 
 .expense-fab {
-  right: 152px;
+  right: calc(152px + env(safe-area-inset-right));
 }
 
 .back-to-top-fab {
-  bottom: 88px;
-  right: 24px;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  right: calc(24px + env(safe-area-inset-right));
 }
 
 html {
@@ -741,7 +745,11 @@ th {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    padding: 14px 18px;
+    /* Top gets the notch/Dynamic Island clearance; left/right cover
+       the rounded-corner/notch inset in landscape orientation. */
+    padding: calc(14px + env(safe-area-inset-top))
+      calc(18px + env(safe-area-inset-right)) 14px
+      calc(18px + env(safe-area-inset-left));
     position: static;
     height: auto;
     overflow-y: visible;
@@ -767,7 +775,11 @@ th {
   }
 
   .main-content {
-    padding: 22px 16px;
+    /* Bottom clears the home indicator on notched iOS devices; the
+       fixed sidebar above already handles the top inset. */
+    padding: 22px calc(16px + env(safe-area-inset-right))
+      calc(22px + env(safe-area-inset-bottom))
+      calc(16px + env(safe-area-inset-left));
   }
 
   .page-header {
