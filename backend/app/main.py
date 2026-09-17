@@ -44,10 +44,3 @@ app.include_router(invitations.router, prefix="/api")
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
-
-
-# Temporary — verifies the Sentry DSN is wired up in production. Remove
-# after confirming the triggered exception shows up in Sentry.
-@app.get("/api/sentry-debug")
-def trigger_sentry_test_error() -> None:
-    1 / 0
