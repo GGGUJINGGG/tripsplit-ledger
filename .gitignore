@@ -11,5 +11,5 @@ backend/app/data/
 backend/.env
 .coverage
 htmlcov/
-.claude/settings.local.json
+.claude/
 CLAUDE.md
