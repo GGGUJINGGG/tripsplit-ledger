@@ -9,6 +9,13 @@ A self-hosted group expense tracker for trips — split bills, track who paid wh
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
 
+**Live demo:** [tripsplit-ledger.vercel.app](https://tripsplit-ledger.vercel.app) — log in with the demo account below (pre-loaded with sample data) or register your own (see [Deployment](#deployment) for how the frontend/backend are hosted).
+
+- **Email:** `demo@tripsplitledger.com`
+- **Password:** `TripSplitDemo2026!`
+
+This is a shared, publicly-writable account — anyone can edit or delete its data, so don't rely on it staying in any particular state. It comes pre-loaded with a sample trip (multiple participants, expenses across categories, a settlement suggestion, and a payment awaiting confirmation) so there's something to look at immediately instead of an empty state.
+
 ## Screenshots
 
 ![Trip Detail](screenshots/trip-detail.png)
