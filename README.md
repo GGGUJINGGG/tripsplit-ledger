@@ -73,6 +73,7 @@ This is a shared, publicly-writable account — anyone can edit or delete its da
 
 **Mobile**
 - Installable as a Progressive Web App — "Add to Home Screen" on iOS/Android for a full-screen, app-like launch experience with no browser chrome
+- Full-screen PWA layout respects iOS's safe areas (notch/Dynamic Island and home indicator) via `env(safe-area-inset-*)`, so the top bar and bottom-corner buttons don't sit under the system UI
 - Floating quick-jump buttons (Add Expense, Record Payment, back to top) on the trip detail page below the 880px breakpoint, so a long trip doesn't require scrolling back up to reach them; hidden above that width since the two-column desktop layout already keeps everything in reach
 
 **Export**
@@ -83,18 +84,14 @@ This is a shared, publicly-writable account — anyone can edit or delete its da
 - **No exchange-rate conversion** — settlements, spending totals, and the category/daily/who-paid charts are all computed independently per currency (a trip with both USD and CNY shared expenses gets two separate settlement suggestions, two separate chart series, and so on), but nothing is ever converted into a common currency. The one exception is the backend's `/dashboard` `total_trip_spending`/`paid_by_person`/`owed_by_person`/`net_balances` fields — those still sum raw amounts across currencies without segmenting them, so those specific numbers aren't meaningful for a mixed-currency trip; the frontend works around it by computing its own per-currency breakdowns instead (and shows "Mixed currencies" in place of a number for shared responsibility/net balance when a trip has more than one currency).
 - **No frontend UI for inviting members beyond the invite-by-email form** — the API also enforces owner-only rules here, but there's no bulk invite or member-management screen beyond that one form.
 - **Expense Ledger pagination is client-side** — `GET /trips/{id}/expenses` supports real `limit`/`offset` query params, but the frontend still loads a trip's full expense list in one request (it's embedded in `GET /trips/{id}`, which the dashboard and CSV export also depend on) and paginates 25 rows at a time in the browser. That keeps the table usable at moderate scale but doesn't reduce what's transferred over the network — a trip with tens of thousands of expenses would need the frontend to fetch pages from the paginated endpoint directly instead.
-- **Password reset, trip invite, and settlement-reminder emails are only sent if `RESEND_API_KEY` is set** — without it, the relevant email functions log the content server-side instead of sending. This deployment has `RESEND_API_KEY` and a verified sending domain (`tripsplitledger.com`, via Cloudflare) configured in production, so those emails go out for real; running your own copy without a verified domain restricts Resend delivery to the `onboarding@resend.dev` sender and to your own Resend account's email address.
 - **Settlement reminders run on a fixed UTC cron schedule, not each trip's local time** — the reminder job (see [Deployment](#deployment)) fires once daily at a fixed UTC hour; "the day after a trip ends" and "every Monday" are both evaluated in UTC, so depending on timezone a reminder can land a few hours earlier or later than local midnight/Monday.
 - **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
-- **Error monitoring (Sentry) is wired up but not turned on** — the backend logs structured JSON for every request (method, path, status, duration) by default, but exception tracking via Sentry only activates if `SENTRY_DSN` is set (see `backend/.env.example`); no Sentry project is configured for this deployment.
-- **The PWA isn't tuned for iOS's full-screen safe areas yet** — installing it to a home screen and launching it standalone works, but the layout hasn't been adjusted for the notch/Dynamic Island and home indicator areas that the browser chrome normally insets around.
 
 ## Planned
 
 - Exchange-rate conversion, so a mixed-currency trip shows one combined settlement instead of one per currency
 - Budget tracking per trip or per category
 - Native app-store packaging (Capacitor or React Native) — the current PWA installs to a home screen but isn't listed on the App Store or Google Play
-- Safe-area-aware layout for the installed PWA's full-screen mode on iOS
 
 ## Architecture
 
@@ -129,6 +126,8 @@ flowchart LR
 Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables. Settlement balances come from the backend; the frontend only derives its own per-currency presentation breakdowns where the dashboard's aggregate fields would otherwise mix currencies.
 
 Access tokens expire after 30 minutes; the frontend transparently exchanges the (longer-lived, rotating) refresh token for a new one on a 401 instead of forcing a re-login. `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP.
+
+The backend logs structured JSON for every request (method, path, status, duration) and reports unhandled exceptions to Sentry in production.
 
 Not shown in the diagram: `backend/app/scripts/send_settlement_reminders.py` runs outside the request/response cycle above, as a separate scheduled job (see [Deployment](#deployment)) rather than an API route — it reads the same database directly and reuses the settlements service to decide who to email.
 
@@ -284,6 +283,8 @@ The steps below are what was actually used to stand this up, kept here so the de
    - `CORS_ORIGINS` → your Vercel URL once you have it (see below); use `http://localhost:5173` as a placeholder until then
 6. Railway builds the Dockerfile and deploys. Under **Settings → Networking**, click **Generate Domain** to get a public URL like `https://your-app.up.railway.app`.
 7. Verify it: `curl https://your-app.up.railway.app/api/health` should return `{"status":"ok"}`. The Dockerfile runs `alembic upgrade head` on every start, so the schema is created automatically on first boot.
+
+**Optional — real email delivery:** password-reset and trip-invite emails are logged to the backend's output instead of actually sent unless you also add `RESEND_API_KEY` (and optionally `RESEND_FROM_EMAIL`) to the same Variables tab. Get a free key at [resend.com](https://resend.com); without your own verified sending domain, Resend restricts delivery to its default `onboarding@resend.dev` sender and to your own Resend account's email address, so you'd only be able to email yourself until you verify a domain. This deployment has both configured (`RESEND_API_KEY` plus a domain verified via Cloudflare), so its emails go out for real.
 
 ### Frontend on Vercel
 
