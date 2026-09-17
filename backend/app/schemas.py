@@ -229,30 +229,46 @@ class PaymentRead(BaseModel):
     updated_at: datetime
 
 
+class CurrencyAmount(BaseModel):
+    currency: str
+    amount: float
+
+
 class CategorySpending(BaseModel):
     category: ExpenseCategory
+    currency: str
     amount: float
 
 
 class DailySpending(BaseModel):
     date: str
+    currency: str
     amount: float
 
 
 class PersonAmount(BaseModel):
     participant_id: str
     name: str
+    currency: str
     amount: float
 
 
 class PersonBalance(BaseModel):
     participant_id: str
     name: str
+    currency: str
     balance: float
 
 
 class DashboardSummary(BaseModel):
-    total_trip_spending: float
+    """Every field here is segmented by currency instead of summed
+    across them — a trip with both USD and CNY shared expenses gets
+    separate entries per currency rather than one meaningless combined
+    number. See README's Known Limitations for why: there's still no
+    exchange-rate conversion, so summing raw amounts across currencies
+    would silently add unrelated units together."""
+
+    total_trip_spending: list[CurrencyAmount]
     spending_by_category: list[CategorySpending]
     spending_by_day: list[DailySpending]
     paid_by_person: list[PersonAmount]
