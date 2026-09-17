@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { HandCoins, Plus } from "lucide-react";
 
+import BackToTopFab from "../components/trip/BackToTopFab";
 import CategoryBreakdown from "../components/trip/CategoryBreakdown";
 import CategoryPieChart from "../components/trip/CategoryPieChart";
 import DashboardSummary from "../components/trip/DashboardSummary";
@@ -57,13 +59,25 @@ export default function TripDetailPage() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const filters = useExpenseFilters(trip?.expenses ?? []);
   const expenseFormRef = useRef<HTMLDivElement>(null);
+  const paymentFormRef = useRef<HTMLDivElement>(null);
 
-  function startEditingExpense(expense: Expense) {
-    setEditingExpenseId(expense.id);
+  function scrollToExpenseForm() {
     expenseFormRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
+  }
+
+  function scrollToPaymentForm() {
+    paymentFormRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function startEditingExpense(expense: Expense) {
+    setEditingExpenseId(expense.id);
+    scrollToExpenseForm();
   }
 
   if (isLoading) {
@@ -130,6 +144,28 @@ export default function TripDetailPage() {
 
       <RefreshFab isRefreshing={isRefreshing} onRefresh={() => void refreshTrip()} />
 
+      <BackToTopFab />
+
+      <button
+        type="button"
+        className="fab expense-fab"
+        onClick={scrollToExpenseForm}
+        aria-label="Jump to Add Expense"
+        title="Add Expense"
+      >
+        <Plus size={20} />
+      </button>
+
+      <button
+        type="button"
+        className="fab payment-fab"
+        onClick={scrollToPaymentForm}
+        aria-label="Jump to Record a Payment"
+        title="Record Payment"
+      >
+        <HandCoins size={20} />
+      </button>
+
       {error ? <div className="alert">{error}</div> : null}
 
       <PendingPaymentConfirmations
@@ -139,6 +175,15 @@ export default function TripDetailPage() {
         isSaving={isSaving}
         onConfirm={confirmPendingPayment}
         onReject={rejectPendingPayment}
+      />
+
+      <SettlementPanel
+        tripId={trip.id}
+        participants={trip.participants}
+        settlements={settlements}
+        currentUserId={user?.id}
+        isSaving={isSaving}
+        onRecordPayment={recordPayment}
       />
 
       <DashboardSummary
@@ -151,15 +196,6 @@ export default function TripDetailPage() {
       <ParticipantSummary
         summary={participantSpendingSummary}
         settlementCurrency={settlementCurrency}
-      />
-
-      <SettlementPanel
-        tripId={trip.id}
-        participants={trip.participants}
-        settlements={settlements}
-        currentUserId={user?.id}
-        isSaving={isSaving}
-        onRecordPayment={recordPayment}
       />
 
       <div className="content-grid two-columns">
@@ -182,16 +218,18 @@ export default function TripDetailPage() {
         </div>
       </div>
 
-      <PaymentsPanel
-        participants={trip.participants}
-        payments={trip.payments}
-        participantNames={participantNames}
-        settlements={settlements}
-        currentUserId={user?.id}
-        isSaving={isSaving}
-        onRecordPayment={recordPayment}
-        onRemovePayment={removePayment}
-      />
+      <div ref={paymentFormRef}>
+        <PaymentsPanel
+          participants={trip.participants}
+          payments={trip.payments}
+          participantNames={participantNames}
+          settlements={settlements}
+          currentUserId={user?.id}
+          isSaving={isSaving}
+          onRecordPayment={recordPayment}
+          onRemovePayment={removePayment}
+        />
+      </div>
 
       <SpendingTrendChart dailySpendingByCurrency={dailySpendingByCurrency} />
 
