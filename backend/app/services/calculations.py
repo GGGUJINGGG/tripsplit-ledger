@@ -4,6 +4,7 @@ from typing import Any
 from app.orm_models import ExpenseCategory, ExpenseType, PaymentStatus
 from app.schemas import (
     CategorySpending,
+    CurrencyAmount,
     DailySpending,
     DashboardSummary,
     PersonAmount,
@@ -238,75 +239,115 @@ def net_balances_cents(
 
 
 def build_dashboard_summary(trip: Any) -> DashboardSummary:
-    category_totals: dict[ExpenseCategory, int] = defaultdict(int)
-    daily_totals: dict[str, int] = defaultdict(int)
+    # Every total below is grouped by currency instead of summed across
+    # them, matching the pattern services/settlements.py already uses
+    # for balances — adding raw amounts in different currencies together
+    # would silently produce a meaningless number.
+    category_totals: dict[tuple[ExpenseCategory, str], int] = defaultdict(int)
+    daily_totals: dict[tuple[str, str], int] = defaultdict(int)
+    total_totals: dict[str, int] = defaultdict(int)
 
     for expense in trip.expenses:
         amount_cents = amount_to_cents(expense.amount)
         category = ExpenseCategory(str(expense.category))
-        category_totals[category] += amount_cents
-        daily_totals[str(expense.date)] += amount_cents
+        currency = expense.currency
+        category_totals[(category, currency)] += amount_cents
+        daily_totals[(str(expense.date), currency)] += amount_cents
+        total_totals[currency] += amount_cents
+
+    all_currencies = sorted(total_totals)
+    shared_currencies = sorted(
+        {
+            expense.currency
+            for expense in trip.expenses
+            if is_shared_expense(expense)
+        }
+        | {
+            payment.currency
+            for payment in getattr(trip, "payments", [])
+            if is_confirmed_payment(payment)
+        }
+    )
 
     participants = get_participants(trip)
-    paid_totals = paid_by_person_cents(trip)
-    owed_totals = owed_by_person_cents(trip)
-    balances = net_balances_cents(trip)
     participants_by_id = {
         participant.id: get_participant_name(participant)
         for participant in participants
     }
 
+    paid_by_person = [
+        PersonAmount(
+            participant_id=str(participant_id),
+            name=participants_by_id[participant_id],
+            currency=currency,
+            amount=cents_to_float(amount),
+        )
+        for currency in all_currencies
+        for participant_id, amount in paid_by_person_cents(
+            trip, currency=currency
+        ).items()
+    ]
+
+    owed_by_person = [
+        PersonAmount(
+            participant_id=str(participant_id),
+            name=participants_by_id[participant_id],
+            currency=currency,
+            amount=cents_to_float(amount),
+        )
+        for currency in shared_currencies
+        for participant_id, amount in owed_by_person_cents(
+            trip, currency=currency
+        ).items()
+    ]
+
+    net_balances = [
+        PersonBalance(
+            participant_id=str(participant_id),
+            name=participants_by_id[participant_id],
+            currency=currency,
+            balance=cents_to_float(balance),
+        )
+        for currency in shared_currencies
+        for participant_id, balance in net_balances_cents(
+            trip, currency=currency
+        ).items()
+    ]
+
     return DashboardSummary(
-        total_trip_spending=cents_to_float(
-            sum(
-                amount_to_cents(expense.amount)
-                for expense in trip.expenses
+        total_trip_spending=[
+            CurrencyAmount(
+                currency=currency,
+                amount=cents_to_float(amount),
             )
-        ),
+            for currency, amount in sorted(total_totals.items())
+        ],
         spending_by_category=[
             CategorySpending(
                 category=category,
+                currency=currency,
                 amount=cents_to_float(amount),
             )
-            for category, amount in sorted(
+            for (category, currency), amount in sorted(
                 category_totals.items(),
                 key=lambda item: (
                     -item[1],
-                    item[0].value,
+                    item[0][0].value,
+                    item[0][1],
                 ),
             )
         ],
         spending_by_day=[
             DailySpending(
                 date=date_value,
+                currency=currency,
                 amount=cents_to_float(amount),
             )
-            for date_value, amount in sorted(
+            for (date_value, currency), amount in sorted(
                 daily_totals.items()
             )
         ],
-        paid_by_person=[
-            PersonAmount(
-                participant_id=str(participant_id),
-                name=participants_by_id[participant_id],
-                amount=cents_to_float(amount),
-            )
-            for participant_id, amount in paid_totals.items()
-        ],
-        owed_by_person=[
-            PersonAmount(
-                participant_id=str(participant_id),
-                name=participants_by_id[participant_id],
-                amount=cents_to_float(amount),
-            )
-            for participant_id, amount in owed_totals.items()
-        ],
-        net_balances=[
-            PersonBalance(
-                participant_id=str(participant_id),
-                name=participants_by_id[participant_id],
-                balance=cents_to_float(balance),
-            )
-            for participant_id, balance in balances.items()
-        ],
+        paid_by_person=paid_by_person,
+        owed_by_person=owed_by_person,
+        net_balances=net_balances,
     )

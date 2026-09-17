@@ -121,30 +121,41 @@ export interface SettlementSummary {
   settlements: Settlement[];
 }
 
+export interface CurrencyAmount {
+  currency: string;
+  amount: number;
+}
+
 export interface CategorySpending {
   category: ExpenseCategory;
+  currency: string;
   amount: number;
 }
 
 export interface DailySpending {
   date: string;
+  currency: string;
   amount: number;
 }
 
 export interface PersonAmount {
   participant_id: string;
   name: string;
+  currency: string;
   amount: number;
 }
 
 export interface PersonBalance {
   participant_id: string;
   name: string;
+  currency: string;
   balance: number;
 }
 
+// Every field is segmented by currency rather than summed across them —
+// see the backend's DashboardSummary docstring for why.
 export interface DashboardSummary {
-  total_trip_spending: number;
+  total_trip_spending: CurrencyAmount[];
   spending_by_category: CategorySpending[];
   spending_by_day: DailySpending[];
   paid_by_person: PersonAmount[];

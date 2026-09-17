@@ -51,15 +51,15 @@ class DashboardRouteTests(AuthenticatedDatabaseTestCase):
 
         self.assertEqual(
             dashboard["total_trip_spending"],
-            10,
+            [{"currency": "USD", "amount": 10}],
         )
         self.assertEqual(
             dashboard["spending_by_category"],
-            [{"category": "food", "amount": 10}],
+            [{"category": "food", "currency": "USD", "amount": 10}],
         )
         self.assertEqual(
             dashboard["spending_by_day"],
-            [{"date": "2026-07-01", "amount": 10}],
+            [{"date": "2026-07-01", "currency": "USD", "amount": 10}],
         )
 
         paid = {
@@ -173,8 +173,14 @@ class DashboardRouteTests(AuthenticatedDatabaseTestCase):
         # Both totals include the $20 shared expense plus only the
         # viewer's own $5 or $15 personal expense — never the other
         # member's hidden personal spending.
-        self.assertEqual(owner_dashboard["total_trip_spending"], 25)
-        self.assertEqual(member_dashboard["total_trip_spending"], 35)
+        self.assertEqual(
+            owner_dashboard["total_trip_spending"],
+            [{"currency": "USD", "amount": 25}],
+        )
+        self.assertEqual(
+            member_dashboard["total_trip_spending"],
+            [{"currency": "USD", "amount": 35}],
+        )
 
         owner_paid = {
             item["participant_id"]: item["amount"]

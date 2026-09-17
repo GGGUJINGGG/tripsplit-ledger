@@ -25,8 +25,6 @@ This is a shared, publicly-writable account — anyone can edit or delete its da
 ## Contents
 
 - [Features](#features)
-- [Known Limitations](#known-limitations)
-- [Planned](#planned)
 - [Architecture](#architecture)
 - [Backend Setup](#backend-setup)
 - [Frontend Setup](#frontend-setup)
@@ -34,6 +32,8 @@ This is a shared, publicly-writable account — anyone can edit or delete its da
 - [API Overview](#api-overview)
 - [Calculation Logic](#calculation-logic)
 - [Tests](#tests)
+- [Known Limitations](#known-limitations)
+- [Planned](#planned)
 
 ## Features
 
@@ -79,19 +79,6 @@ This is a shared, publicly-writable account — anyone can edit or delete its da
 **Export**
 - CSV export of the full expense ledger with all filters applied
 
-## Known Limitations
-
-- **No exchange-rate conversion** — settlements, spending totals, and the category/daily/who-paid charts are all computed independently per currency (a trip with both USD and CNY shared expenses gets two separate settlement suggestions, two separate chart series, and so on), but nothing is ever converted into a common currency. The one exception is the backend's `/dashboard` `total_trip_spending`/`paid_by_person`/`owed_by_person`/`net_balances` fields — those still sum raw amounts across currencies without segmenting them, so those specific numbers aren't meaningful for a mixed-currency trip; the frontend works around it by computing its own per-currency breakdowns instead (and shows "Mixed currencies" in place of a number for shared responsibility/net balance when a trip has more than one currency).
-- **Expense Ledger pagination is client-side** — `GET /trips/{id}/expenses` supports real `limit`/`offset` query params, but the frontend still loads a trip's full expense list in one request (it's embedded in `GET /trips/{id}`, which the dashboard and CSV export also depend on) and paginates 25 rows at a time in the browser. That keeps the table usable at moderate scale but doesn't reduce what's transferred over the network — a trip with tens of thousands of expenses would need the frontend to fetch pages from the paginated endpoint directly instead.
-- **Settlement reminders run on a fixed UTC cron schedule, not each trip's local time** — the reminder job (see [Deployment](#deployment)) fires once daily at a fixed UTC hour; "the day after a trip ends" and "every Monday" are both evaluated in UTC, so depending on timezone a reminder can land a few hours earlier or later than local midnight/Monday.
-- **Rate limiting is in-memory and single-instance** — `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP, but the counters live in the API process's memory. Fine for this app's one Railway container; a multi-instance deployment would need a shared store (Redis, etc.) instead.
-
-## Planned
-
-- Exchange-rate conversion, so a mixed-currency trip shows one combined settlement instead of one per currency
-- Budget tracking per trip or per category
-- Native app-store packaging (Capacitor or React Native) — the current PWA installs to a home screen but isn't listed on the App Store or Google Play
-
 ## Architecture
 
 ```mermaid
@@ -122,7 +109,7 @@ flowchart LR
     Settle --> DB
 ```
 
-Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables. Settlement balances come from the backend; the frontend only derives its own per-currency presentation breakdowns where the dashboard's aggregate fields would otherwise mix currencies.
+Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables, and both segment their results by currency rather than summing across them.
 
 Access tokens expire after 30 minutes; the frontend transparently exchanges the (longer-lived, rotating) refresh token for a new one on a 401 instead of forcing a re-login. `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP.
 
@@ -396,7 +383,7 @@ GET /api/trips/{trip_id}/settlements
 
 ## Calculation Logic
 
-The backend calculates:
+The backend calculates the following, each segmented independently per currency (see [Known Limitations](#known-limitations) — there's no cross-currency conversion, so nothing here is ever summed across currencies):
 
 - Total trip spending
 - Spending by category (shared and personal separately)
@@ -404,7 +391,7 @@ The backend calculates:
 - Amount paid by each person
 - Amount owed by each person
 - Net balances
-- Simplified settlement payments, computed independently per currency
+- Simplified settlement payments
 
 Confirmed payments (an actual transfer between two participants, not an expense) net directly into that currency's balances and settlement suggestions — a payment moves a debtor's balance toward zero and a creditor's balance down by the same amount, without changing anyone's spending totals or share of the trip's costs. Pending and rejected payments do not affect the calculation.
 
@@ -460,6 +447,17 @@ pip install -r requirements-dev.txt
 coverage run --source=app -m unittest discover -s tests
 coverage report -m
 ```
+
+## Known Limitations
+
+- **Expense Ledger pagination is client-side** — `GET /trips/{id}/expenses` supports real `limit`/`offset` query params, but the frontend still loads a trip's full expense list in one request (it's embedded in `GET /trips/{id}`, which the dashboard and CSV export also depend on) and paginates 25 rows at a time in the browser. That keeps the table usable at moderate scale but doesn't reduce what's transferred over the network — a trip with tens of thousands of expenses would need the frontend to fetch pages from the paginated endpoint directly instead.
+- **Settlement reminders run on a fixed UTC cron schedule, not each trip's local time** — the reminder job (see [Deployment](#deployment)) fires once daily at a fixed UTC hour; "the day after a trip ends" and "every Monday" are both evaluated in UTC, so depending on timezone a reminder can land a few hours earlier or later than local midnight/Monday.
+
+## Planned
+
+- Exchange-rate conversion, so a mixed-currency trip shows one combined settlement instead of one per currency — settlements, spending totals, and every `/dashboard` field are computed and segmented independently per currency today (a trip with both USD and CNY shared expenses gets two separate settlement suggestions, two separate chart series, and so on), with no conversion into a common currency
+- Native app-store packaging (Capacitor or React Native) — the current PWA installs to a home screen but isn't listed on the App Store or Google Play
+- Jump-to-payment-app buttons when recording a payment (Venmo/PayPal.me deep links with the amount and recipient prefilled; Alipay/WeChat Pay would only open the app, with no prefill, since neither has a public API for that) — money never passes through TripSplit itself, this just hands off to whatever app the recipient already uses
 
 Frontend tests use Vitest and React Testing Library and don't need a database or a running backend — API calls are mocked. Run them from the `frontend` directory:
 

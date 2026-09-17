@@ -86,19 +86,25 @@ class CalculationTests(unittest.TestCase):
     def test_dashboard_summary(self) -> None:
         dashboard = build_dashboard_summary(self.trip)
 
-        self.assertEqual(dashboard.total_trip_spending, 570)
         self.assertEqual(
-            [(item.category, item.amount) for item in dashboard.spending_by_category],
+            [(item.currency, item.amount) for item in dashboard.total_trip_spending],
+            [("USD", 570)],
+        )
+        self.assertEqual(
             [
-                (ExpenseCategory.HOTEL, 300),
-                (ExpenseCategory.SHOPPING, 120),
-                (ExpenseCategory.FOOD, 90),
-                (ExpenseCategory.GAS, 60),
+                (item.category, item.currency, item.amount)
+                for item in dashboard.spending_by_category
+            ],
+            [
+                (ExpenseCategory.HOTEL, "USD", 300),
+                (ExpenseCategory.SHOPPING, "USD", 120),
+                (ExpenseCategory.FOOD, "USD", 90),
+                (ExpenseCategory.GAS, "USD", 60),
             ],
         )
         self.assertEqual(
-            [(item.date, item.amount) for item in dashboard.spending_by_day],
-            [("2026-07-01", 390), ("2026-07-02", 180)],
+            [(item.date, item.currency, item.amount) for item in dashboard.spending_by_day],
+            [("2026-07-01", "USD", 390), ("2026-07-02", "USD", 180)],
         )
         self.assertEqual(
             {item.participant_id: item.amount for item in dashboard.paid_by_person},

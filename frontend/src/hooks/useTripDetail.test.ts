@@ -64,17 +64,17 @@ function buildTrip(overrides: Partial<Trip> = {}): Trip {
 
 function buildDashboard(overrides: Partial<DashboardSummary> = {}): DashboardSummary {
   return {
-    total_trip_spending: 100,
+    total_trip_spending: [{ currency: "USD", amount: 100 }],
     spending_by_category: [],
     spending_by_day: [],
-    paid_by_person: [{ participant_id: "p1", name: "Alex", amount: 100 }],
+    paid_by_person: [{ participant_id: "p1", name: "Alex", currency: "USD", amount: 100 }],
     owed_by_person: [
-      { participant_id: "p1", name: "Alex", amount: 50 },
-      { participant_id: "p2", name: "Maya", amount: 50 },
+      { participant_id: "p1", name: "Alex", currency: "USD", amount: 50 },
+      { participant_id: "p2", name: "Maya", currency: "USD", amount: 50 },
     ],
     net_balances: [
-      { participant_id: "p1", name: "Alex", balance: 50 },
-      { participant_id: "p2", name: "Maya", balance: -50 },
+      { participant_id: "p1", name: "Alex", currency: "USD", balance: 50 },
+      { participant_id: "p2", name: "Maya", currency: "USD", balance: -50 },
     ],
     ...overrides,
   };
@@ -165,13 +165,15 @@ describe("useTripDetail", () => {
       }),
     );
     vi.mocked(getSettlements).mockResolvedValue({ settlements: [] });
-    // The backend's own dashboard math isn't currency-segmented, so its
-    // numbers can't be safely labeled with one currency for mixed trips.
+    // The backend now segments this by currency, but the frontend still
+    // only has a single settlementCurrency concept (see hook comment
+    // above), so for a mixed-currency trip it must still not attribute
+    // these per-currency entries to one currency.
     vi.mocked(getDashboard).mockResolvedValue(
       buildDashboard({
         owed_by_person: [
-          { participant_id: "p1", name: "Alex", amount: 70 },
-          { participant_id: "p2", name: "Maya", amount: 70 },
+          { participant_id: "p1", name: "Alex", currency: "USD", amount: 50 },
+          { participant_id: "p2", name: "Maya", currency: "EUR", amount: 20 },
         ],
       }),
     );
