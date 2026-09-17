@@ -54,7 +54,9 @@ A self-hosted group expense tracker for trips — split bills, track who paid wh
 **Settlements**
 - Simplified payment plan that minimizes the number of transactions, computed independently per currency for mixed-currency trips
 - Settlement amounts consistent with per-participant net balances
-- Record an actual payment between two participants — one click to mark a suggested settlement as paid, or a freeform amount/currency/date/note for a partial or unprompted payment — and undo it if it was a mistake; net balances and settlement suggestions update immediately
+- Record an actual payment between two participants — one click from a suggested settlement, or a freeform amount/currency/date/note for a partial or unprompted payment
+- Payments to registered members require recipient confirmation before they affect balances and settlement suggestions; the recipient can confirm or reject them, while payments to placeholder members take effect immediately
+- Delete a recorded payment if it was entered by mistake; balances and settlement suggestions update accordingly
 
 **Reminders**
 - Automated email reminders for outstanding balances: the day after a trip's `end_date` (if set), or every Monday for a trip with no end date — skipped once everyone's settled up, and requires no manual trigger once the scheduled job is deployed (see [Deployment](#deployment))
@@ -117,7 +119,7 @@ flowchart LR
     Settle --> DB
 ```
 
-Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables — the frontend consumes those endpoints directly rather than recomputing balances client-side.
+Every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/forgot-password`, and `/api/auth/reset-password` requires a valid JWT and checks that the requesting user is a member of the trip being accessed; only the trip owner can rename/delete a trip or invite new members. `/dashboard` and `/settlements` derive their numbers from the same expense/share tables. Settlement balances come from the backend; the frontend only derives its own per-currency presentation breakdowns where the dashboard's aggregate fields would otherwise mix currencies.
 
 Access tokens expire after 30 minutes; the frontend transparently exchanges the (longer-lived, rotating) refresh token for a new one on a 401 instead of forcing a re-login. `/auth/login`, `/auth/register`, and `/auth/forgot-password` are rate-limited per IP.
 
@@ -186,20 +188,22 @@ erDiagram
         string currency
         date date
         text note
+        enum status "pending | confirmed | rejected"
+        datetime responded_at "nullable"
     }
 ```
 
 `trip_members` is the join between a `User` account and a `Trip` — its `user_id` is nullable so a guest can be added by name only (no account) and a trip owner can't accidentally lock themselves out by deleting their own user record elsewhere. `invited_email` is set on the same nullable-`user_id` row for a pending email invite (regardless of whether that email is already registered) — it isn't a real membership until accepted: registering with a matching email claims every such row across every trip at once (see `register_user()` in `app/routers/auth.py`), and a registered user accepts individually from `GET /api/invitations` (see `app/routers/invitations.py`). `expenses.amount_cents`, `expense_shares.amount_cents`, and `payments.amount_cents` are integers (not floats) specifically to avoid floating-point rounding drift when splitting a bill or recording a payment; see [Calculation Logic](#calculation-logic).
 
-A `Payment` is a real transfer between two trip members recorded to settle an existing debt — it isn't spending, so it never counts toward any spending total, but it nets directly into that currency's balances and settlement suggestions (see [Calculation Logic](#calculation-logic)). `trips.end_date_reminder_sent_at` and `trips.last_weekly_reminder_date` exist purely so the settlement-reminder job (see [Deployment](#deployment)) doesn't email the same trip twice for the same occasion.
+A `Payment` is a real transfer between two trip members recorded to settle an existing debt — it isn't spending, so it never counts toward any spending total. A payment to a registered member starts as `pending` and only affects that currency's balances and settlement suggestions after the recipient confirms it; the recipient may reject it instead. A payment to a placeholder member is confirmed immediately because that member has no account with which to respond. `trips.end_date_reminder_sent_at` and `trips.last_weekly_reminder_date` exist purely so the settlement-reminder job (see [Deployment](#deployment)) doesn't email the same trip twice for the same occasion.
 
 ## Backend Setup
 
 Requirements:
 
 - Python 3.11+
-- Docker Desktop
-- Docker Compose
+- Node.js 20+
+- Docker with Docker Compose
 
 Start PostgreSQL from the project root:
 
@@ -243,7 +247,7 @@ In a separate terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -257,10 +261,7 @@ By default, the frontend calls the backend at `http://localhost:8000/api`.
 
 ## Deployment
 
-The backend runs as a container (`backend/Dockerfile`) on [Railway](https://railway.app), and the frontend is a static build on [Vercel](https://vercel.com). Both are connected to this repo's `main` branch — pushing redeploys them automatically.
-
-- **Frontend:** https://tripsplit-ledger.vercel.app
-- **Backend health check:** the Railway service's `/api/health` endpoint
+The backend runs as a container (`backend/Dockerfile`) on [Railway](https://railway.app), and the frontend is a static build on [Vercel](https://vercel.com). Both are connected to this repo's `main` branch — pushing redeploys them automatically. The production URL is intentionally not published here.
 
 The steps below are what was actually used to stand this up, kept here so the deployment is reproducible.
 
@@ -374,6 +375,8 @@ Payments:
 ```text
 GET    /api/trips/{trip_id}/payments
 POST   /api/trips/{trip_id}/payments
+POST   /api/trips/{trip_id}/payments/{payment_id}/confirm
+POST   /api/trips/{trip_id}/payments/{payment_id}/reject
 DELETE /api/trips/{trip_id}/payments/{payment_id}
 ```
 
@@ -396,7 +399,7 @@ The backend calculates:
 - Net balances
 - Simplified settlement payments, computed independently per currency
 
-Recorded payments (an actual transfer between two participants, not an expense) net directly into that currency's balances and settlement suggestions — a payment moves a debtor's balance toward zero and a creditor's balance down by the same amount, without changing anyone's spending totals or share of the trip's costs.
+Confirmed payments (an actual transfer between two participants, not an expense) net directly into that currency's balances and settlement suggestions — a payment moves a debtor's balance toward zero and a creditor's balance down by the same amount, without changing anyone's spending totals or share of the trip's costs. Pending and rejected payments do not affect the calculation.
 
 Expense shares and payment amounts are calculated in cents to avoid floating point drift.
 
