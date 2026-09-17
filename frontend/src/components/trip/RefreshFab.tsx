@@ -8,7 +8,7 @@ interface RefreshFabProps {
 export default function RefreshFab({ isRefreshing, onRefresh }: RefreshFabProps) {
   return (
     <button
-      className="refresh-fab"
+      className="fab refresh-fab"
       type="button"
       onClick={onRefresh}
       disabled={isRefreshing}
