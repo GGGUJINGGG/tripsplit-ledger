@@ -287,7 +287,7 @@ The steps below are what was actually used to stand this up, kept here so the de
 1. In the same Railway project, click **New → Empty Service** (not "from GitHub repo" — this reuses the backend service's existing image once linked below).
 2. On the new service's **Settings**, set **Source Repo** to this repo and **Root Directory** to `backend`, same as the web service.
 3. Under **Settings → Deploy**, set **Custom Start Command** to `python -m app.scripts.send_settlement_reminders` (this replaces the Dockerfile's default `CMD`, so it runs the script once and exits instead of starting `uvicorn`).
-4. Under **Settings → Cron Schedule**, set it to `0 9 * * *` (9am UTC daily — the script itself decides whether today is the right day for each trip, so daily is the correct cadence).
+4. Under **Settings → Cron Schedule**, set it to `0 14 * * *` (14:00 UTC daily, i.e. 9am US Central — pick whichever UTC hour lands at a sensible local time for you; the script itself decides whether today is the right day for each trip, so daily is the correct cadence).
 5. Copy the same `DATABASE_URL` and `RESEND_API_KEY`/`RESEND_FROM_EMAIL` variables from the web service's **Variables** tab (this service needs its own copies — Railway doesn't share variables between services automatically).
 6. Trigger a manual run once (Railway's dashboard has a "Trigger" button on cron services) and check the logs for `Sent settlement reminders for N trip(s)`.
 
